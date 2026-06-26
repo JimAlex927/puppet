@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -28,8 +27,9 @@ type processMetadata struct {
 	CommandLine      string    `json:"commandLine"`
 	Workdir          string    `json:"workdir"`
 	Port             int       `json:"port"`
-	StdoutLogPath    string    `json:"stdoutLogPath"`
-	StderrLogPath    string    `json:"stderrLogPath"`
+	StdoutLogPath    string    `json:"stdoutLogPath,omitempty"`
+	StderrLogPath    string    `json:"stderrLogPath,omitempty"`
+	ShowWindow       bool      `json:"showWindow"`
 	ProcessStartedAt string    `json:"processStartedAt"`
 	StartedAt        time.Time `json:"startedAt"`
 	StoppedAt        time.Time `json:"stoppedAt,omitempty"`
@@ -83,6 +83,7 @@ func (e *Executor) Metadata() node.NodeMetadata {
 			{Name: "workdir", Label: "Workdir", Type: "input", Required: false, Default: "${workspace}"},
 			{Name: "metadataPath", Label: "Metadata Path", Type: "input", Required: false},
 			{Name: "port", Label: "Port", Type: "number", Required: false, Default: 0},
+			{Name: "showWindow", Label: "Show Console Window", Type: "switch", Required: false, Default: false},
 			{Name: "ifAlreadyRunning", Label: "If Already Running", Type: "select", Required: false, Default: "fail", Options: []string{"fail", "stop", "allow"}},
 			{Name: "force", Label: "Force Stop", Type: "switch", Required: false, Default: true},
 		},
@@ -103,6 +104,7 @@ func (e *StartExecutor) Metadata() node.NodeMetadata {
 			{Name: "workdir", Label: "Workdir", Type: "input", Required: false, Default: "${workspace}"},
 			{Name: "metadataPath", Label: "Metadata Path", Type: "input", Required: false},
 			{Name: "port", Label: "Port", Type: "number", Required: false, Default: 0},
+			{Name: "showWindow", Label: "Show Console Window", Type: "switch", Required: false, Default: false},
 			{Name: "ifAlreadyRunning", Label: "If Already Running", Type: "select", Required: false, Default: "fail", Options: []string{"fail", "stop", "allow"}},
 			{Name: "force", Label: "Force Stop Existing", Type: "switch", Required: false, Default: true},
 		},
@@ -212,6 +214,7 @@ func start(ctx *node.NodeContext, params map[string]any) (*node.NodeResult, erro
 	}
 	processName := filepath.Base(executable)
 	port := intFrom(params["port"])
+	showWindow := boolFrom(params["showWindow"], false)
 	policy := valueOrDefault(stringFrom(params["ifAlreadyRunning"]), "fail")
 
 	existing, err := existingPIDs(ctx, processName, port)
@@ -235,37 +238,35 @@ func start(ctx *node.NodeContext, params map[string]any) (*node.NodeResult, erro
 		}
 	}
 
-	processDir := filepath.Join(ctx.Workspace, "processes")
+	metadataPath := resolveMetadataPath(ctx.Workspace, stringFrom(params["metadataPath"]), name)
+	processDir := filepath.Dir(metadataPath)
 	if err := os.MkdirAll(processDir, 0o755); err != nil {
 		return nil, err
 	}
-	stamp := time.Now().Format("20060102150405")
-	stdoutPath := filepath.Join(processDir, name+"-"+stamp+".out.log")
-	stderrPath := filepath.Join(processDir, name+"-"+stamp+".err.log")
-	metadataPath := resolveMetadataPath(ctx.Workspace, stringFrom(params["metadataPath"]), name)
 
-	stdoutFile, err := os.OpenFile(stdoutPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	var stdoutPath, stderrPath string
+	var stdoutFile, stderrFile *os.File
+	if !showWindow {
+		stamp := time.Now().Format("20060102150405")
+		stdoutPath = filepath.Join(processDir, name+"-"+stamp+".out.log")
+		stderrPath = filepath.Join(processDir, name+"-"+stamp+".err.log")
+		stdoutFile, err = os.OpenFile(stdoutPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if err != nil {
+			return nil, err
+		}
+		defer stdoutFile.Close()
+		stderrFile, err = os.OpenFile(stderrPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if err != nil {
+			return nil, err
+		}
+		defer stderrFile.Close()
+	}
+
+	ctx.Log("system", fmt.Sprintf("process start plan: executable=%s args=%q workdir=%s showWindow=%t\n", executable, strings.Join(args, " "), workdir, showWindow))
+	pid, err := launchProcess(executable, args, workdir, showWindow, stdoutFile, stderrFile)
 	if err != nil {
 		return nil, err
 	}
-	defer stdoutFile.Close()
-	stderrFile, err := os.OpenFile(stderrPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return nil, err
-	}
-	defer stderrFile.Close()
-
-	cmd := exec.Command(executable, args...)
-	cmd.Dir = workdir
-	cmd.Stdout = stdoutFile
-	cmd.Stderr = stderrFile
-	configureProcessCommand(cmd)
-	ctx.Log("system", fmt.Sprintf("process start plan: executable=%s args=%q workdir=%s\n", executable, strings.Join(args, " "), workdir))
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	pid := cmd.Process.Pid
-	_ = cmd.Process.Release()
 
 	info, err := queryProcessInfo(ctx, pid)
 	if err != nil {
@@ -283,6 +284,7 @@ func start(ctx *node.NodeContext, params map[string]any) (*node.NodeResult, erro
 		Port:             port,
 		StdoutLogPath:    stdoutPath,
 		StderrLogPath:    stderrPath,
+		ShowWindow:       showWindow,
 		ProcessStartedAt: info.CreationDate,
 		StartedAt:        time.Now(),
 		Status:           "running",
@@ -290,15 +292,18 @@ func start(ctx *node.NodeContext, params map[string]any) (*node.NodeResult, erro
 	if err := writeMetadata(metadataPath, meta); err != nil {
 		return nil, err
 	}
-	ctx.Log("system", fmt.Sprintf("process started: pid=%d metadata=%s stdout=%s stderr=%s\n", pid, metadataPath, stdoutPath, stderrPath))
-	return &node.NodeResult{Output: map[string]any{
+	ctx.Log("system", fmt.Sprintf("process started: pid=%d metadata=%s showWindow=%t stdout=%s stderr=%s\n", pid, metadataPath, showWindow, stdoutPath, stderrPath))
+	result := map[string]any{
 		"pid":          pid,
 		"name":         name,
 		"processName":  meta.ProcessName,
 		"metadataPath": metadataPath,
-		"stdoutLog":    stdoutPath,
-		"stderrLog":    stderrPath,
-	}}, nil
+	}
+	if stdoutPath != "" {
+		result["stdoutLog"] = stdoutPath
+		result["stderrLog"] = stderrPath
+	}
+	return &node.NodeResult{Output: result}, nil
 }
 
 func stop(ctx *node.NodeContext, params map[string]any) (*node.NodeResult, error) {

@@ -15,8 +15,22 @@ import (
 	"puppet/internal/node"
 )
 
-func configureProcessCommand(cmd *exec.Cmd) {
+func configureProcessCommand(cmd *exec.Cmd, showWindow bool) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+}
+
+func launchProcess(executable string, args []string, workdir string, showWindow bool, stdout, stderr *os.File) (int, error) {
+	cmd := exec.Command(executable, args...)
+	cmd.Dir = workdir
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	configureProcessCommand(cmd, showWindow)
+	if err := cmd.Start(); err != nil {
+		return 0, err
+	}
+	pid := cmd.Process.Pid
+	_ = cmd.Process.Release()
+	return pid, nil
 }
 
 func processSupported() bool { return true }

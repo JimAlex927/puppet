@@ -4,12 +4,17 @@ package process
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 
 	"puppet/internal/node"
 )
 
-func configureProcessCommand(cmd *exec.Cmd) {}
+func configureProcessCommand(cmd *exec.Cmd, showWindow bool) {}
+
+func launchProcess(executable string, args []string, workdir string, showWindow bool, stdout, stderr *os.File) (int, error) {
+	return 0, fmt.Errorf("process node is not supported on this OS")
+}
 
 func processSupported() bool { return false }
 

@@ -1,17 +1,39 @@
 <template>
   <div>
-    <div class="page-actions">
-      <el-form :inline="true" v-if="pipeline">
-        <el-form-item label="Pipeline">
-          <el-input v-model="pipeline.name" style="width: 220px" />
-        </el-form-item>
-        <el-form-item label="Agent Labels">
+    <!-- Header -->
+    <div class="page-actions" style="align-items: flex-start">
+      <div style="flex: 1; min-width: 0">
+        <el-breadcrumb separator="/" style="margin-bottom: 8px; font-size: 13px">
+          <el-breadcrumb-item :to="{ path: '/projects' }">项目</el-breadcrumb-item>
+          <el-breadcrumb-item v-if="task" :to="{ path: `/projects/${task.projectId}` }">
+            {{ projectName }}
+          </el-breadcrumb-item>
+          <el-breadcrumb-item>Pipeline</el-breadcrumb-item>
+        </el-breadcrumb>
+        <el-input
+          v-model="taskForm.name"
+          placeholder="任务名称"
+          style="width: 360px; font-size: 15px; font-weight: 600"
+          size="large"
+        />
+      </div>
+      <el-space style="flex-shrink: 0; margin-top: 28px">
+        <el-button :icon="Setting" @click="settingsVisible = true">任务设置</el-button>
+        <el-button :icon="Back" @click="goBack">返回</el-button>
+        <el-button type="primary" :icon="DocumentChecked" :loading="saving" @click="save">保存</el-button>
+      </el-space>
+    </div>
+
+    <!-- Pipeline config strip -->
+    <div v-if="pipeline" class="panel pipeline-config-strip">
+      <el-form :inline="true" style="margin: 0">
+        <el-form-item label="Agent" style="margin-bottom: 0">
           <el-select v-model="pipeline.agentSelector.labels" multiple style="width: 200px">
             <el-option label="local" value="local" />
           </el-select>
         </el-form-item>
-        <el-form-item label="Start Node">
-          <el-select v-model="pipeline.startNodeId" style="width: 220px" clearable>
+        <el-form-item label="起始节点" style="margin-bottom: 0">
+          <el-select v-model="pipeline.startNodeId" style="width: 240px" clearable placeholder="默认第一个节点">
             <el-option
               v-for="item in pipeline.nodes"
               :key="item.id"
@@ -21,13 +43,10 @@
           </el-select>
         </el-form-item>
       </el-form>
-      <el-space>
-        <el-button :icon="Back" @click="$router.back()">返回</el-button>
-        <el-button type="primary" :icon="DocumentChecked" @click="save">保存</el-button>
-      </el-space>
     </div>
 
-    <div v-if="pipeline" class="pipeline-layout">
+    <!-- Pipeline layout -->
+    <div v-if="pipeline" class="pipeline-layout" style="margin-top: 16px">
       <NodePalette :node-types="nodeTypes" @add="addNode" />
 
       <div class="panel">
@@ -78,16 +97,10 @@
             </div>
             <div class="pipeline-list">
               <div v-for="(input, index) in pipeline.inputs" :key="index" class="pipeline-node">
-                <!-- Core fields row -->
                 <div class="input-row">
                   <el-input v-model="input.name" placeholder="变量名" size="small" style="width: 120px" />
                   <el-input v-model="input.label" placeholder="显示标签" size="small" style="width: 120px" />
-                  <el-select
-                    v-model="input.type"
-                    size="small"
-                    style="width: 100px"
-                    @change="onInputTypeChange(input)"
-                  >
+                  <el-select v-model="input.type" size="small" style="width: 100px" @change="onInputTypeChange(input)">
                     <el-option label="文本" value="string" />
                     <el-option label="下拉" value="select" />
                     <el-option label="开关" value="boolean" />
@@ -111,7 +124,6 @@
                   />
                 </div>
 
-                <!-- Select: source config -->
                 <template v-if="input.type === 'select'">
                   <div class="input-source-row">
                     <span class="muted" style="font-size: 12px; margin-right: 8px">来源</span>
@@ -122,15 +134,9 @@
                       @update:model-value="setSourceType(input, $event as string)"
                     >
                       <el-option label="静态选项" value="static" />
-                      <el-option
-                        v-for="t in sourceTypes"
-                        :key="t.type"
-                        :label="t.name"
-                        :value="t.type"
-                      />
+                      <el-option v-for="t in sourceTypes" :key="t.type" :label="t.name" :value="t.type" />
                     </el-select>
                   </div>
-                  <!-- Static options -->
                   <div v-if="getSourceType(input) === 'static'" class="input-source-config">
                     <el-input
                       v-model="input.optionsText"
@@ -138,7 +144,6 @@
                       size="small"
                     />
                   </div>
-                  <!-- Dynamic source: fields rendered from backend metadata -->
                   <div v-else class="input-source-config">
                     <el-form label-position="left" label-width="90px" size="small">
                       <el-form-item
@@ -147,16 +152,13 @@
                         :label="field.label"
                         style="margin-bottom: 8px"
                       >
-                        <el-input
-                          v-if="field.type === 'input'"
-                          v-model="(input.source!.params as any)[field.name]"
-                        />
+                        <el-input v-if="field.type === 'input'" v-model="(input.source!.params as any)[field.name]" />
                         <el-input
                           v-else-if="field.type === 'textarea'"
                           v-model="(input.source!.params as any)[field.name]"
                           type="textarea"
                           :rows="5"
-                          placeholder="标准输出每行作为一个选项&#10;&#10;示例：&#10;curl -s https://api.example.com/items | jq -r '.[].name'"
+                          placeholder="标准输出每行作为一个选项"
                         />
                         <el-input-number
                           v-else-if="field.type === 'number'"
@@ -168,12 +170,7 @@
                           v-model="(input.source!.params as any)[field.name]"
                           style="width: 100%"
                         >
-                          <el-option
-                            v-for="opt in field.options ?? []"
-                            :key="opt"
-                            :label="opt"
-                            :value="opt"
-                          />
+                          <el-option v-for="opt in field.options ?? []" :key="opt" :label="opt" :value="opt" />
                         </el-select>
                         <el-select
                           v-else-if="field.type === 'credential'"
@@ -207,13 +204,35 @@
         :credentials="credentials"
       />
     </div>
+
+    <!-- Task settings drawer -->
+    <el-drawer v-model="settingsVisible" title="任务设置" direction="rtl" size="360px">
+      <el-form label-position="top" style="padding: 0 4px">
+        <el-form-item label="描述">
+          <el-input v-model="taskForm.description" type="textarea" :rows="4" placeholder="任务描述（可选）" />
+        </el-form-item>
+        <el-form-item label="超时时间 (秒)">
+          <el-input-number v-model="taskForm.timeoutSeconds" :min="0" style="width: 100%" />
+          <div class="muted" style="margin-top: 6px; font-size: 12px">0 表示不限制超时</div>
+        </el-form-item>
+        <el-form-item label="允许并发执行">
+          <el-switch v-model="taskForm.allowConcurrent" />
+          <span class="muted" style="margin-left: 10px; font-size: 12px">
+            {{ taskForm.allowConcurrent ? '同一任务可同时运行多次' : '同一时间只允许运行一次' }}
+          </span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="settingsVisible = false">关闭</el-button>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { ArrowDown, ArrowUp, Back, Delete, DocumentChecked, Plus } from '@element-plus/icons-vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowDown, ArrowUp, Back, Delete, DocumentChecked, Plus, Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api'
 import NodeConfigPanel from '@/components/PipelineEditor/NodeConfigPanel.vue'
@@ -225,16 +244,30 @@ import type {
   PipelineDefinition,
   PipelineInput,
   PipelineNode,
+  Task,
 } from '@/types'
 
 const route = useRoute()
+const router = useRouter()
 const taskId = Number(route.params.id)
+
 const pipeline = ref<PipelineDefinition>()
+const task = ref<Task>()
+const projectName = ref('')
 const nodeTypes = ref<NodeMetadata[]>([])
 const sourceTypes = ref<NodeMetadata[]>([])
 const credentials = ref<Credential[]>([])
 const selectedIndex = ref(0)
 const activeTab = ref('nodes')
+const saving = ref(false)
+const settingsVisible = ref(false)
+
+const taskForm = reactive({
+  name: '',
+  description: '',
+  timeoutSeconds: 600,
+  allowConcurrent: false,
+})
 
 const selectedNode = computed(() =>
   selectedIndex.value >= 0 ? pipeline.value?.nodes[selectedIndex.value] : undefined,
@@ -244,16 +277,34 @@ const selectedMetadata = computed(() =>
 )
 
 async function load() {
-  const [data, types, sources, credentialItems] = await Promise.all([
+  const [data, types, sources, credentialItems, taskData] = await Promise.all([
     api.pipeline(taskId),
     api.nodeTypes(),
     api.sourceTypes(),
     api.credentials(),
+    api.task(taskId),
   ])
   pipeline.value = normalizePipeline(data)
   nodeTypes.value = types
   sourceTypes.value = sources
   credentials.value = credentialItems
+  task.value = taskData
+  Object.assign(taskForm, {
+    name: taskData.name,
+    description: taskData.description,
+    timeoutSeconds: taskData.timeoutSeconds,
+    allowConcurrent: taskData.allowConcurrent,
+  })
+  const proj = await api.project(taskData.projectId)
+  projectName.value = proj.name
+}
+
+function goBack() {
+  if (task.value) {
+    router.push(`/projects/${task.value.projectId}`)
+  } else {
+    router.back()
+  }
 }
 
 function normalizePipeline(data: PipelineDefinition): PipelineDefinition {
@@ -379,9 +430,27 @@ function addInput() {
 }
 
 async function save() {
-  if (!pipeline.value) return
-  await api.savePipeline(taskId, serializePipeline(pipeline.value))
-  ElMessage.success('Pipeline 已保存')
+  if (!pipeline.value || !task.value) return
+  if (!taskForm.name.trim()) {
+    ElMessage.warning('任务名称不能为空')
+    return
+  }
+  saving.value = true
+  try {
+    await Promise.all([
+      api.updateTask(taskId, {
+        name: taskForm.name,
+        description: taskForm.description,
+        timeoutSeconds: taskForm.timeoutSeconds,
+        allowConcurrent: taskForm.allowConcurrent,
+      }),
+      api.savePipeline(taskId, serializePipeline(pipeline.value)),
+    ])
+    ElMessage.success('已保存')
+    router.push(`/projects/${task.value.projectId}`)
+  } finally {
+    saving.value = false
+  }
 }
 
 function serializePipeline(data: PipelineDefinition): PipelineDefinition {
@@ -426,6 +495,11 @@ onMounted(load)
 </script>
 
 <style scoped>
+.pipeline-config-strip {
+  padding: 10px 16px;
+  margin-bottom: 0;
+}
+
 .input-row {
   display: flex;
   align-items: center;

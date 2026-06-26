@@ -142,6 +142,20 @@ func TestProcessMetadataPathCanBeDirectory(t *testing.T) {
 	if _, err := os.Stat(expected); err != nil {
 		t.Fatalf("expected metadata file under directory: %v", err)
 	}
+	stdoutPath := fmt.Sprint(startResult.Output["stdoutLog"])
+	stderrPath := fmt.Sprint(startResult.Output["stderrLog"])
+	if filepath.Dir(stdoutPath) != metadataDir {
+		t.Fatalf("expected stdout log under metadata directory: got %s want dir %s", stdoutPath, metadataDir)
+	}
+	if filepath.Dir(stderrPath) != metadataDir {
+		t.Fatalf("expected stderr log under metadata directory: got %s want dir %s", stderrPath, metadataDir)
+	}
+	if _, err := os.Stat(stdoutPath); err != nil {
+		t.Fatalf("expected stdout log file under metadata directory: %v", err)
+	}
+	if _, err := os.Stat(stderrPath); err != nil {
+		t.Fatalf("expected stderr log file under metadata directory: %v", err)
+	}
 	if _, err := stopExecutor.Execute(&node.NodeContext{
 		Context:   ctx,
 		Workspace: workspace,
@@ -155,6 +169,22 @@ func TestProcessMetadataPathCanBeDirectory(t *testing.T) {
 	}
 }
 
+func TestQuoteCmdArg(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{`C:\no\spaces\app.exe`, `C:\no\spaces\app.exe`},
+		{`C:\path\trailing\`, `C:\path\trailing\`},
+		{`C:\Program Files\app.exe`, `"C:\Program Files\app.exe"`},
+		{`C:\Program Files\trailing\`, `"C:\Program Files\trailing\\"`},
+		{`say "hello"`, `"say \"hello\""`},
+		{`C:\a\"b`, `"C:\a\\\"b"`},
+	}
+	for _, c := range cases {
+		if got := quoteCmdArg(c.in); got != c.want {
+			t.Errorf("quoteCmdArg(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 func TestDecodeWindowsCommandOutput(t *testing.T) {
 	gbkSuccess := []byte{0xb3, 0xc9, 0xb9, 0xa6}
 	if got := decodeWindowsCommandOutput(gbkSuccess); got != "成功" {
@@ -164,3 +194,4 @@ func TestDecodeWindowsCommandOutput(t *testing.T) {
 		t.Fatalf("decode UTF-8 output mismatch: got %q", got)
 	}
 }
+
