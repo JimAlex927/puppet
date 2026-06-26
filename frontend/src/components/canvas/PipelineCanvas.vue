@@ -5,6 +5,7 @@
     @drop.prevent="onDrop"
   >
     <VueFlow
+      id="puppet-canvas"
       :node-types="nodeTypes"
       :default-edge-options="defaultEdgeOpts"
       fit-view-on-init
@@ -14,6 +15,7 @@
       @pane-click="emit('pane-click')"
       @nodes-delete="onNodesDelete"
       @edges-delete="onEdgesDelete"
+      @connect="handleConnect"
     >
       <Background
         :gap="20"
@@ -83,15 +85,14 @@ const {
   getNodes,
   getEdges,
   screenToFlowCoordinate,
-  onConnect,
   fitView,
-} = useVueFlow()
+} = useVueFlow('puppet-canvas')
 
 const isEmpty = computed(() => getNodes.value.length === 0)
 
 // ── VF event handlers ────────────────────────────────────────────
 
-onConnect((connection: Connection) => {
+function handleConnect(connection: Connection) {
   if (!connection.source || !connection.target) return
   const isNext = connection.sourceHandle === 'next'
   const color = isNext ? '#2dd4bf' : '#f87171'
@@ -119,7 +120,7 @@ onConnect((connection: Connection) => {
   ])
 
   emit('connect', connection.source, connection.sourceHandle ?? 'next', connection.target)
-})
+}
 
 function onNodesDelete(deleted: Node[]) {
   emit('nodes-delete', deleted.map((n) => n.id))
