@@ -420,6 +420,13 @@ func prepareSSHKey(workspace string, privateKey string) (authContext, error) {
 	if privateKey == "" {
 		return authContext{}, fmt.Errorf("credential is missing privateKey")
 	}
+	// Normalize line endings (CRLF → LF) and ensure trailing newline.
+	// OpenSSH rejects PEM keys that have \r\n endings or no final newline.
+	privateKey = strings.ReplaceAll(privateKey, "\r\n", "\n")
+	privateKey = strings.ReplaceAll(privateKey, "\r", "\n")
+	if !strings.HasSuffix(privateKey, "\n") {
+		privateKey += "\n"
+	}
 	dir, err := os.MkdirTemp(workspace, ".git-ssh-*")
 	if err != nil {
 		return authContext{}, err
