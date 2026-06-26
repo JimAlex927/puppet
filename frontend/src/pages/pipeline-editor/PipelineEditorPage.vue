@@ -28,7 +28,7 @@
 
     <!-- ── Editor area: palette + canvas + config ──────────────────── -->
     <div v-if="pipeline" class="editor-body">
-      <NodePalette :node-types="nodeTypes" />
+      <NodePalette :node-types="nodeTypes" @node-click="onNodeClickAdd" />
 
       <PipelineCanvas
         ref="canvasRef"
@@ -367,6 +367,17 @@ watch([pipeline, () => !!canvasRef.value], ([pl, ready]) => {
 function onNodeDrop(meta: NodeMetadata, position: { x: number; y: number }) {
   if (!pipeline.value) return
   const { vfNode } = createPipelineNode(meta, position)
+  canvasRef.value?.addVFNode(vfNode)
+}
+
+// Click-to-add: places node at a staggered position in the visible canvas area
+let clickAddOffset = 0
+function onNodeClickAdd(meta: NodeMetadata) {
+  if (!pipeline.value) return
+  const existing = pipeline.value.nodes.length
+  const x = 100 + (existing % 3) * 260
+  const y = 80 + Math.floor(existing / 3) * 160 + (clickAddOffset++ % 3) * 20
+  const { vfNode } = createPipelineNode(meta, { x, y })
   canvasRef.value?.addVFNode(vfNode)
 }
 

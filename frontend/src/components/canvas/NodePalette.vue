@@ -20,6 +20,7 @@
           class="palette-item"
           draggable="true"
           @dragstart="onDragStart($event, item)"
+          @click="emit('node-click', item)"
         >
           <div class="palette-item-icon" :style="{ background: categoryColor(item.category) + '22', color: categoryColor(item.category) }">
             <el-icon :size="13"><component :is="categoryIcon(item.category)" /></el-icon>
@@ -67,6 +68,7 @@ import { ArrowDown, Clock, Connection, Document, Monitor, Operation, Search } fr
 import type { NodeMetadata } from '@/types'
 
 const props = defineProps<{ nodeTypes: NodeMetadata[] }>()
+const emit = defineEmits<{ 'node-click': [meta: NodeMetadata] }>()
 
 const query = ref('')
 const open = reactive(new Set<string>(['process', 'script']))

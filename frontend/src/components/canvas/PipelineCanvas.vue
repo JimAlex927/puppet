@@ -1,9 +1,5 @@
 <template>
-  <div
-    class="canvas-wrap"
-    @dragover.prevent="onDragOver"
-    @drop.prevent="onDrop"
-  >
+  <div class="canvas-wrap">
     <VueFlow
       id="puppet-canvas"
       :node-types="nodeTypes"
@@ -16,6 +12,8 @@
       @nodes-delete="onNodesDelete"
       @edges-delete="onEdgesDelete"
       @connect="handleConnect"
+      @dragover="onDragOver"
+      @drop="onDrop"
     >
       <Background
         :gap="20"
@@ -140,12 +138,14 @@ function onNodeClick({ node }: NodeMouseEvent) {
 // ── Drag & drop from palette ─────────────────────────────────────
 
 function onDragOver(e: DragEvent) {
-  if (e.dataTransfer?.types.includes('application/puppet-node')) {
-    e.dataTransfer.dropEffect = 'copy'
+  e.preventDefault()
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = e.dataTransfer.types.includes('application/puppet-node') ? 'copy' : 'none'
   }
 }
 
 function onDrop(e: DragEvent) {
+  e.preventDefault()
   const raw = e.dataTransfer?.getData('application/puppet-node')
   if (!raw) return
   const meta = JSON.parse(raw) as NodeMetadata
