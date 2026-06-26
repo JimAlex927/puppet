@@ -1,51 +1,59 @@
 <template>
-  <Handle type="target" :position="Position.Top" class="vf-handle vf-handle--in" />
+  <!-- Single root — handles position relative to this div -->
+  <div
+    class="cn-root"
+    :class="[`cn--${data.category}`, { 'cn--selected': selected, [`cn--${data.status}`]: !!data.status }]"
+  >
+    <!-- Input handle: top center, small grey dot -->
+    <Handle
+      type="target"
+      :position="Position.Top"
+      :style="HIN"
+    />
 
-  <div class="cn" :class="[`cn--${data.category}`, { 'cn--selected': selected, [`cn--${data.status}`]: !!data.status }]">
-    <div class="cn-stripe" :style="{ background: color }" />
-    <div class="cn-body">
-      <div class="cn-icon" :style="{ background: color + '22', color }">
-        <el-icon :size="14"><component :is="icon" /></el-icon>
+    <!-- Card body -->
+    <div class="cn-card">
+      <div class="cn-stripe" :style="{ background: color }" />
+      <div class="cn-body">
+        <div class="cn-icon" :style="{ background: color + '22', color }">
+          <el-icon :size="14"><component :is="icon" /></el-icon>
+        </div>
+        <div class="cn-text">
+          <div class="cn-name">{{ data.pipelineNode.name }}</div>
+          <div class="cn-type">{{ data.pipelineNode.type }}</div>
+        </div>
+        <div v-if="data.status" class="cn-badge" :class="`cn-badge--${data.status}`">
+          <el-icon v-if="data.status === 'running'" class="is-loading" :size="13"><Loading /></el-icon>
+          <el-icon v-else-if="data.status === 'success'" :size="13"><Select /></el-icon>
+          <el-icon v-else-if="data.status === 'failed'"  :size="13"><CloseBold /></el-icon>
+          <el-icon v-else-if="data.status === 'timeout'" :size="13"><Timer /></el-icon>
+          <el-icon v-else :size="13"><Clock /></el-icon>
+        </div>
       </div>
-      <div class="cn-text">
-        <div class="cn-name">{{ data.pipelineNode.name }}</div>
-        <div class="cn-type">{{ data.pipelineNode.type }}</div>
-      </div>
-      <div v-if="data.status" class="cn-badge" :class="`cn-badge--${data.status}`">
-        <el-icon v-if="data.status === 'running'" class="is-loading" :size="13"><Loading /></el-icon>
-        <el-icon v-else-if="data.status === 'success'" :size="13"><Select /></el-icon>
-        <el-icon v-else-if="data.status === 'failed'" :size="13"><CloseBold /></el-icon>
-        <el-icon v-else-if="data.status === 'timeout'" :size="13"><Timer /></el-icon>
-        <el-icon v-else :size="13"><Clock /></el-icon>
+      <div v-if="data.status && data.durationMs" class="cn-dur">
+        {{ fmtDuration(data.durationMs) }}
       </div>
     </div>
-    <div v-if="data.status && data.durationMs" class="cn-dur">
-      {{ fmtDuration(data.durationMs) }}
-    </div>
+
+    <!-- Output handles + labels (editor mode only) -->
+    <template v-if="!data.status">
+      <!-- Bottom = 成功/next -->
+      <Handle id="next" type="source" :position="Position.Bottom" :style="HNEXT" />
+      <div class="cn-port-label cn-port-label--bottom" style="color:#2dd4bf">成功</div>
+
+      <!-- Right = 失败/fallback -->
+      <Handle id="fallback" type="source" :position="Position.Right" :style="HFALL" />
+      <div class="cn-port-label cn-port-label--right" style="color:#f87171">失败</div>
+    </template>
   </div>
-
-  <!-- Output handles — shown in editor mode only -->
-  <template v-if="!data.status">
-    <Handle id="next" type="source" :position="Position.Bottom" class="vf-handle vf-handle--next" />
-    <div class="cn-handle-label cn-handle-label--bottom">成功</div>
-    <Handle id="fallback" type="source" :position="Position.Right" class="vf-handle vf-handle--fallback" />
-    <div class="cn-handle-label cn-handle-label--right">失败</div>
-  </template>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Handle, Position, type NodeProps } from '@vue-flow/core'
 import {
-  Clock,
-  CloseBold,
-  Connection,
-  Document,
-  Loading,
-  Monitor,
-  Operation,
-  Select,
-  Timer,
+  Clock, CloseBold, Connection, Document, Loading,
+  Monitor, Operation, Select, Timer,
 } from '@element-plus/icons-vue'
 import type { PipelineNode, Status } from '@/types'
 import { fmtDuration } from '@/utils/format'
@@ -58,6 +66,34 @@ type CanvasNodeData = {
 }
 
 const props = defineProps<NodeProps<CanvasNodeData>>()
+
+// Inline styles so they always win over Vue Flow's own handle CSS
+const BASE_HANDLE = {
+  borderRadius: '50%',
+  border: '2.5px solid #1a1b23',
+  cursor: 'crosshair',
+  zIndex: '10',
+} as const
+
+const HIN: Record<string, string> = {
+  ...BASE_HANDLE,
+  width: '10px', height: '10px',
+  background: '#64748b',
+}
+
+const HNEXT: Record<string, string> = {
+  ...BASE_HANDLE,
+  width: '14px', height: '14px',
+  background: '#2dd4bf',
+  boxShadow: '0 0 0 3px rgba(45,212,191,0.25)',
+}
+
+const HFALL: Record<string, string> = {
+  ...BASE_HANDLE,
+  width: '14px', height: '14px',
+  background: '#f87171',
+  boxShadow: '0 0 0 3px rgba(248,113,113,0.25)',
+}
 
 const CATEGORY: Record<string, { color: string; icon: unknown }> = {
   process: { color: '#2dd4bf', icon: Monitor },
@@ -72,8 +108,14 @@ const icon  = computed(() => CATEGORY[props.data?.category]?.icon  ?? CATEGORY.d
 </script>
 
 <style scoped>
-.cn {
+/* ── Root — single element so handles position correctly ── */
+.cn-root {
+  position: relative;
   width: 210px;
+}
+
+/* ── Card ───────────────────────────────────────────────── */
+.cn-card {
   background: #252633;
   border: 1.5px solid #3a3b4e;
   border-radius: 8px;
@@ -83,24 +125,20 @@ const icon  = computed(() => CATEGORY[props.data?.category]?.icon  ?? CATEGORY.d
   position: relative;
 }
 
-.cn--selected {
+.cn--selected .cn-card {
   border-color: #2dd4bf;
   box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
 }
 
-.cn--running {
-  border-color: #3b82f6;
-  animation: pulse 1.6s ease-in-out infinite;
-}
-
-.cn--success { border-color: #22c55e; }
-.cn--failed  { border-color: #ef4444; }
-.cn--timeout { border-color: #f97316; }
-.cn--skipped { opacity: 0.5; }
+.cn--running .cn-card  { border-color: #3b82f6; animation: pulse 1.6s ease-in-out infinite; }
+.cn--success .cn-card  { border-color: #22c55e; }
+.cn--failed  .cn-card  { border-color: #ef4444; }
+.cn--timeout .cn-card  { border-color: #f97316; }
+.cn--skipped .cn-card  { opacity: 0.5; }
 
 @keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
-  50%       { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
+  50%       { box-shadow: 0 0 0 8px rgba(59,130,246,0); }
 }
 
 .cn-stripe {
@@ -119,35 +157,21 @@ const icon  = computed(() => CATEGORY[props.data?.category]?.icon  ?? CATEGORY.d
 .cn-icon {
   width: 28px; height: 28px;
   border-radius: 6px;
-  display: grid;
-  place-items: center;
+  display: grid; place-items: center;
   flex-shrink: 0;
 }
 
 .cn-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #e2e8f0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 13px; font-weight: 600; color: #e2e8f0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 120px;
 }
-
 .cn-type {
-  font-size: 11px;
-  color: #8892a4;
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 11px; color: #8892a4; margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.cn-badge {
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
+.cn-badge { margin-left: auto; flex-shrink: 0; }
 .cn-badge--success { color: #22c55e; }
 .cn-badge--failed  { color: #ef4444; }
 .cn-badge--running { color: #3b82f6; }
@@ -155,80 +179,31 @@ const icon  = computed(() => CATEGORY[props.data?.category]?.icon  ?? CATEGORY.d
 .cn-badge--pending, .cn-badge--canceled, .cn-badge--skipped { color: #64748b; }
 
 .cn-dur {
-  font-size: 10px;
-  color: #64748b;
-  padding: 0 14px 6px;
-  margin-top: -4px;
+  font-size: 10px; color: #64748b;
+  padding: 0 14px 6px; margin-top: -4px;
 }
 
-/* Input handle — top, small grey dot */
-:deep(.vf-handle--in) {
-  width: 10px;
-  height: 10px;
-  border: 2px solid #1a1b23;
-  border-radius: 50%;
-  background: #64748b;
-  cursor: crosshair;
-}
-
-/* Output handles — always-visible colored dots */
-:deep(.vf-handle--next),
-:deep(.vf-handle--fallback) {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2.5px solid #1a1b23;
-  cursor: crosshair;
-  transition: transform 0.15s, box-shadow 0.15s;
-  /* label badge below/beside the dot */
-  position: relative;
-}
-
-:deep(.vf-handle--next) {
-  background: #2dd4bf;
-  box-shadow: 0 0 0 2px rgba(45,212,191,0.3);
-}
-
-:deep(.vf-handle--fallback) {
-  background: #f87171;
-  box-shadow: 0 0 0 2px rgba(248,113,113,0.3);
-}
-
-:deep(.vf-handle--next:hover) {
-  transform: scale(1.35);
-  box-shadow: 0 0 0 4px rgba(45,212,191,0.4);
-}
-
-:deep(.vf-handle--fallback:hover) {
-  transform: scale(1.35);
-  box-shadow: 0 0 0 4px rgba(248,113,113,0.4);
-}
-
-/* Label badges beside the handles */
-.cn-handle-label {
+/* ── Port labels ─────────────────────────────────────────── */
+.cn-port-label {
   position: absolute;
   font-size: 10px;
   font-weight: 600;
   pointer-events: none;
   white-space: nowrap;
-  background: #1e1f2e;
-  border: 1px solid #3a3b4e;
-  border-radius: 3px;
-  padding: 1px 5px;
-  line-height: 1.5;
+  line-height: 1;
 }
 
-.cn-handle-label--bottom {
-  bottom: -28px;
+/* sits just below the bottom handle dot */
+.cn-port-label--bottom {
+  bottom: -22px;
   left: 50%;
   transform: translateX(-50%);
-  color: #2dd4bf;
 }
 
-.cn-handle-label--right {
-  right: -36px;
+/* sits just to the right of the right handle dot */
+.cn-port-label--right {
   top: 50%;
+  right: -38px;
   transform: translateY(-50%);
-  color: #f87171;
 }
 </style>
