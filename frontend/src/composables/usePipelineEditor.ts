@@ -158,6 +158,11 @@ export function usePipelineEditor(taskId: number) {
 
   // ── Save ─────────────────────────────────────────────────────────
 
+  async function savePipelineOnly() {
+    if (!pipeline.value) return
+    await api.savePipeline(taskId, serializePipeline(pipeline.value))
+  }
+
   async function save(currentVFNodes?: Node[]) {
     if (!pipeline.value || !task.value) return
     if (!taskForm.name.trim()) {
@@ -208,6 +213,7 @@ export function usePipelineEditor(taskId: number) {
     handleEdgesDelete,
     handleNodesDelete,
     createPipelineNode,
+    savePipelineOnly,
     save,
   }
 }

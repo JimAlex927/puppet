@@ -156,7 +156,7 @@
         </el-form-item>
         <template v-if="inputForm.type === 'select'">
           <el-form-item label="数据来源">
-            <el-select v-model="inputForm.sourceType" style="width:100%">
+            <el-select v-model="inputForm.sourceType" style="width:100%" @change="onSourceTypeChange">
               <el-option label="静态选项" value="static" />
               <el-option
                 v-for="t in sourceTypes"
@@ -255,7 +255,7 @@ const {
   taskForm,
   load, buildFlowElements,
   handleConnect, handleEdgesDelete, handleNodesDelete,
-  createPipelineNode, save,
+  createPipelineNode, savePipelineOnly, save,
 } = usePipelineEditor(taskId)
 
 const canvasRef = ref<InstanceType<typeof PipelineCanvas>>()
@@ -310,7 +310,8 @@ function openEditInput(idx: number) {
   inputDialogVisible.value = true
 }
 
-watch(() => inputForm.sourceType, (type) => {
+// Only called when user manually changes the source type dropdown — NOT during programmatic form population
+function onSourceTypeChange(type: string) {
   if (type === 'static') { inputForm.sourceParams = {}; return }
   const meta = sourceTypes.value.find(t => t.type === type)
   const params: Record<string, unknown> = {}
@@ -318,9 +319,9 @@ watch(() => inputForm.sourceType, (type) => {
     params[field.name] = field.default ?? (field.type === 'number' ? 0 : field.type === 'credential' ? 0 : '')
   }
   inputForm.sourceParams = params
-})
+}
 
-function saveInput() {
+async function saveInput() {
   if (!inputForm.name.trim()) { ElMessage.warning('请填写参数名'); return }
 
   const isStatic = inputForm.sourceType === 'static'
@@ -344,6 +345,12 @@ function saveInput() {
     pipeline.value!.inputs[editingInputIdx.value] = inp
   }
   inputDialogVisible.value = false
+  try {
+    await savePipelineOnly()
+    ElMessage.success('参数已保存')
+  } catch {
+    ElMessage.error('保存失败，请点击顶部"保存"按钮重试')
+  }
 }
 
 function removeInput(idx: number) {
