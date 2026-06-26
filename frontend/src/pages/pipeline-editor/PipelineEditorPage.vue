@@ -154,14 +154,73 @@
           <el-input v-if="inputForm.type !== 'boolean'" v-model="inputForm.defaultText" placeholder="可选" />
           <el-switch v-else v-model="inputForm.defaultBool" />
         </el-form-item>
-        <el-form-item v-if="inputForm.type === 'select'" label="选项 (每行一个)">
-          <el-input
-            v-model="inputForm.optionsText"
-            type="textarea"
-            :rows="4"
-            placeholder="选项1&#10;选项2&#10;选项3"
-          />
-        </el-form-item>
+        <template v-if="inputForm.type === 'select'">
+          <el-form-item label="数据来源">
+            <el-select v-model="inputForm.sourceType" style="width:100%">
+              <el-option label="静态选项" value="static" />
+              <el-option
+                v-for="t in sourceTypes"
+                :key="t.type"
+                :label="t.name"
+                :value="t.type"
+              />
+            </el-select>
+          </el-form-item>
+
+          <!-- Static options -->
+          <el-form-item v-if="inputForm.sourceType === 'static'" label="选项 (每行一个)">
+            <el-input
+              v-model="inputForm.optionsText"
+              type="textarea"
+              :rows="4"
+              placeholder="选项1&#10;选项2&#10;选项3"
+            />
+          </el-form-item>
+
+          <!-- Dynamic source params -->
+          <template v-else>
+            <el-form-item
+              v-for="field in currentSourceMeta?.fields ?? []"
+              :key="field.name"
+              :label="field.label"
+            >
+              <el-input v-if="field.type === 'input'" v-model="(inputForm.sourceParams as any)[field.name]" />
+              <el-input
+                v-else-if="field.type === 'textarea'"
+                v-model="(inputForm.sourceParams as any)[field.name]"
+                type="textarea"
+                :rows="4"
+                placeholder="标准输出每行作为一个选项"
+              />
+              <el-input-number
+                v-else-if="field.type === 'number'"
+                v-model="(inputForm.sourceParams as any)[field.name]"
+                style="width:100%"
+              />
+              <el-select
+                v-else-if="field.type === 'select'"
+                v-model="(inputForm.sourceParams as any)[field.name]"
+                style="width:100%"
+              >
+                <el-option v-for="opt in field.options ?? []" :key="opt" :label="opt" :value="opt" />
+              </el-select>
+              <el-select
+                v-else-if="field.type === 'credential'"
+                v-model="(inputForm.sourceParams as any)[field.name]"
+                clearable
+                style="width:100%"
+              >
+                <el-option label="无需凭据" :value="0" />
+                <el-option
+                  v-for="cred in credentials"
+                  :key="cred.id"
+                  :label="`${cred.name} (${cred.type})`"
+                  :value="cred.id"
+                />
+              </el-select>
+            </el-form-item>
+          </template>
+        </template>
         <el-form-item label="必填">
           <el-switch v-model="inputForm.required" />
         </el-form-item>
@@ -175,7 +234,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Back, Delete, DocumentChecked, EditPen, Plus, Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -190,7 +249,7 @@ const router = useRouter()
 const taskId = Number(route.params.id)
 
 const {
-  pipeline, task, projectName, nodeTypes, credentials,
+  pipeline, task, projectName, nodeTypes, sourceTypes, credentials,
   loading, saving,
   selectedNodeId, selectedNode, selectedMetadata,
   taskForm,
@@ -214,11 +273,21 @@ const inputForm = reactive({
   defaultText: '',
   defaultBool: false,
   optionsText: '',
+  sourceType: 'static',
+  sourceParams: {} as Record<string, unknown>,
 })
+
+const currentSourceMeta = computed(() =>
+  sourceTypes.value.find(t => t.type === inputForm.sourceType),
+)
 
 function resetInputForm() {
   editingInputIdx.value = null
-  Object.assign(inputForm, { name: '', label: '', type: 'string', required: false, defaultText: '', defaultBool: false, optionsText: '' })
+  Object.assign(inputForm, {
+    name: '', label: '', type: 'string', required: false,
+    defaultText: '', defaultBool: false, optionsText: '',
+    sourceType: 'static', sourceParams: {},
+  })
 }
 
 function openAddInput() {
@@ -235,26 +304,38 @@ function openEditInput(idx: number) {
   inputForm.required = inp.required
   inputForm.defaultBool = inp.type === 'boolean' ? Boolean(inp.default) : false
   inputForm.defaultText = inp.type !== 'boolean' && inp.default != null ? String(inp.default) : ''
+  inputForm.sourceType = inp.source?.type ?? 'static'
+  inputForm.sourceParams = inp.source ? { ...inp.source.params } : {}
   inputForm.optionsText = (inp.options ?? []).join('\n')
   inputDialogVisible.value = true
 }
 
+watch(() => inputForm.sourceType, (type) => {
+  if (type === 'static') { inputForm.sourceParams = {}; return }
+  const meta = sourceTypes.value.find(t => t.type === type)
+  const params: Record<string, unknown> = {}
+  for (const field of meta?.fields ?? []) {
+    params[field.name] = field.default ?? (field.type === 'number' ? 0 : field.type === 'credential' ? 0 : '')
+  }
+  inputForm.sourceParams = params
+})
+
 function saveInput() {
   if (!inputForm.name.trim()) { ElMessage.warning('请填写参数名'); return }
-  const options = inputForm.type === 'select'
-    ? inputForm.optionsText.split('\n').map(s => s.trim()).filter(Boolean)
-    : undefined
-  const defaultVal = inputForm.type === 'boolean'
-    ? inputForm.defaultBool
-    : inputForm.defaultText.trim() || undefined
 
+  const isStatic = inputForm.sourceType === 'static'
   const inp: PipelineInput = {
     name: inputForm.name.trim(),
     label: inputForm.label.trim() || inputForm.name.trim(),
     type: inputForm.type,
     required: inputForm.required,
-    default: defaultVal,
-    options,
+    default: inputForm.type === 'boolean' ? inputForm.defaultBool : (inputForm.defaultText.trim() || undefined),
+    options: (inputForm.type === 'select' && isStatic)
+      ? inputForm.optionsText.split('\n').map(s => s.trim()).filter(Boolean)
+      : undefined,
+    source: (inputForm.type === 'select' && !isStatic)
+      ? { type: inputForm.sourceType, params: { ...inputForm.sourceParams } }
+      : undefined,
   }
 
   if (editingInputIdx.value === null) {
