@@ -53,52 +53,137 @@
       v-model="settingsVisible"
       title="任务设置"
       direction="rtl"
-      size="360px"
+      size="400px"
       :append-to-body="true"
     >
-      <el-form label-position="top">
-        <el-form-item label="描述">
-          <el-input v-model="taskForm.description" type="textarea" :rows="4" />
-        </el-form-item>
-        <el-form-item label="超时时间 (秒)">
-          <el-input-number v-model="taskForm.timeoutSeconds" :min="0" style="width: 100%" />
-          <div class="muted" style="margin-top: 6px; font-size: 12px">0 表示不限制</div>
-        </el-form-item>
-        <el-form-item label="允许并发执行">
-          <el-switch v-model="taskForm.allowConcurrent" />
-        </el-form-item>
-        <el-form-item label="Agent">
-          <el-select v-model="pipeline!.agentSelector.labels" multiple style="width: 100%">
-            <el-option label="local" value="local" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="起始节点">
-          <el-select v-model="pipeline!.startNodeId" clearable style="width: 100%">
-            <el-option
-              v-for="n in pipeline!.nodes"
-              :key="n.id"
-              :label="`${n.name} (${n.id})`"
-              :value="n.id"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
+      <el-tabs>
+        <!-- Basic settings -->
+        <el-tab-pane label="基本设置">
+          <el-form label-position="top" style="padding-top:4px">
+            <el-form-item label="描述">
+              <el-input v-model="taskForm.description" type="textarea" :rows="3" />
+            </el-form-item>
+            <el-form-item label="超时时间 (秒)">
+              <el-input-number v-model="taskForm.timeoutSeconds" :min="0" style="width: 100%" />
+              <div class="muted" style="margin-top: 6px; font-size: 12px">0 表示不限制</div>
+            </el-form-item>
+            <el-form-item label="允许并发执行">
+              <el-switch v-model="taskForm.allowConcurrent" />
+            </el-form-item>
+            <el-form-item label="Agent">
+              <el-select v-model="pipeline!.agentSelector.labels" multiple style="width: 100%">
+                <el-option label="local" value="local" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="起始节点">
+              <el-select v-model="pipeline!.startNodeId" clearable style="width: 100%">
+                <el-option
+                  v-for="n in pipeline!.nodes"
+                  :key="n.id"
+                  :label="`${n.name} (${n.id})`"
+                  :value="n.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+
+        <!-- Pipeline inputs (run parameters) -->
+        <el-tab-pane :label="`运行参数 (${pipeline?.inputs.length ?? 0})`">
+          <div style="padding-top:8px">
+            <!-- Input list -->
+            <div
+              v-for="(inp, idx) in pipeline!.inputs"
+              :key="idx"
+              class="pi-row"
+            >
+              <div class="pi-info">
+                <span class="pi-name">{{ inp.name }}</span>
+                <el-tag size="small" style="margin-left:6px">{{ inp.type }}</el-tag>
+                <el-tag v-if="inp.required" size="small" type="danger" style="margin-left:4px">必填</el-tag>
+                <div class="pi-label">{{ inp.label }}</div>
+              </div>
+              <el-space>
+                <el-button link :icon="EditPen" @click="openEditInput(idx)" />
+                <el-button link :icon="Delete" type="danger" @click="removeInput(idx)" />
+              </el-space>
+            </div>
+
+            <el-empty v-if="!pipeline!.inputs.length" description="尚未配置运行参数" :image-size="60" />
+
+            <el-button
+              style="width:100%;margin-top:12px"
+              :icon="Plus"
+              @click="openAddInput"
+            >
+              添加参数
+            </el-button>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+
       <template #footer>
         <el-button @click="settingsVisible = false">关闭</el-button>
       </template>
     </el-drawer>
+
+    <!-- Input edit dialog -->
+    <el-dialog
+      v-model="inputDialogVisible"
+      :title="editingInputIdx === null ? '添加运行参数' : '编辑运行参数'"
+      width="440px"
+      append-to-body
+      @closed="resetInputForm"
+    >
+      <el-form label-position="top">
+        <el-form-item label="参数名 (变量名)" required>
+          <el-input v-model="inputForm.name" placeholder="例：branch" />
+        </el-form-item>
+        <el-form-item label="显示标签">
+          <el-input v-model="inputForm.label" placeholder="例：Git 分支" />
+        </el-form-item>
+        <el-form-item label="类型">
+          <el-select v-model="inputForm.type" style="width:100%">
+            <el-option label="文本 (string)" value="string" />
+            <el-option label="下拉选择 (select)" value="select" />
+            <el-option label="数字 (number)" value="number" />
+            <el-option label="开关 (boolean)" value="boolean" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="默认值">
+          <el-input v-if="inputForm.type !== 'boolean'" v-model="inputForm.defaultText" placeholder="可选" />
+          <el-switch v-else v-model="inputForm.defaultBool" />
+        </el-form-item>
+        <el-form-item v-if="inputForm.type === 'select'" label="选项 (每行一个)">
+          <el-input
+            v-model="inputForm.optionsText"
+            type="textarea"
+            :rows="4"
+            placeholder="选项1&#10;选项2&#10;选项3"
+          />
+        </el-form-item>
+        <el-form-item label="必填">
+          <el-switch v-model="inputForm.required" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="inputDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveInput">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Back, DocumentChecked, Setting } from '@element-plus/icons-vue'
+import { Back, Delete, DocumentChecked, EditPen, Plus, Setting } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { usePipelineEditor } from '@/composables/usePipelineEditor'
 import NodePalette from '@/components/canvas/NodePalette.vue'
 import PipelineCanvas from '@/components/canvas/PipelineCanvas.vue'
 import NodeConfigDrawer from '@/components/canvas/NodeConfigDrawer.vue'
-import type { NodeMetadata } from '@/types'
+import type { NodeMetadata, PipelineInput } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -116,6 +201,73 @@ const {
 
 const canvasRef = ref<InstanceType<typeof PipelineCanvas>>()
 const settingsVisible = ref(false)
+
+// ── Pipeline inputs management ─────────────────────────────────
+const inputDialogVisible = ref(false)
+const editingInputIdx = ref<number | null>(null)
+
+const inputForm = reactive({
+  name: '',
+  label: '',
+  type: 'string' as PipelineInput['type'],
+  required: false,
+  defaultText: '',
+  defaultBool: false,
+  optionsText: '',
+})
+
+function resetInputForm() {
+  editingInputIdx.value = null
+  Object.assign(inputForm, { name: '', label: '', type: 'string', required: false, defaultText: '', defaultBool: false, optionsText: '' })
+}
+
+function openAddInput() {
+  resetInputForm()
+  inputDialogVisible.value = true
+}
+
+function openEditInput(idx: number) {
+  const inp = pipeline.value!.inputs[idx]
+  editingInputIdx.value = idx
+  inputForm.name = inp.name
+  inputForm.label = inp.label
+  inputForm.type = inp.type
+  inputForm.required = inp.required
+  inputForm.defaultBool = inp.type === 'boolean' ? Boolean(inp.default) : false
+  inputForm.defaultText = inp.type !== 'boolean' && inp.default != null ? String(inp.default) : ''
+  inputForm.optionsText = (inp.options ?? []).join('\n')
+  inputDialogVisible.value = true
+}
+
+function saveInput() {
+  if (!inputForm.name.trim()) { ElMessage.warning('请填写参数名'); return }
+  const options = inputForm.type === 'select'
+    ? inputForm.optionsText.split('\n').map(s => s.trim()).filter(Boolean)
+    : undefined
+  const defaultVal = inputForm.type === 'boolean'
+    ? inputForm.defaultBool
+    : inputForm.defaultText.trim() || undefined
+
+  const inp: PipelineInput = {
+    name: inputForm.name.trim(),
+    label: inputForm.label.trim() || inputForm.name.trim(),
+    type: inputForm.type,
+    required: inputForm.required,
+    default: defaultVal,
+    options,
+  }
+
+  if (editingInputIdx.value === null) {
+    pipeline.value!.inputs.push(inp)
+  } else {
+    pipeline.value!.inputs[editingInputIdx.value] = inp
+  }
+  inputDialogVisible.value = false
+}
+
+function removeInput(idx: number) {
+  pipeline.value!.inputs.splice(idx, 1)
+}
 
 // Init canvas once pipeline + canvas are both ready
 watch([pipeline, () => !!canvasRef.value], ([pl, ready]) => {
@@ -222,5 +374,28 @@ onMounted(load)
   flex: 1;
   display: flex;
   overflow: hidden;
+}
+
+/* Pipeline input list */
+.pi-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.pi-info { flex: 1; min-width: 0; }
+
+.pi-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.pi-label {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  margin-top: 2px;
 }
 </style>
