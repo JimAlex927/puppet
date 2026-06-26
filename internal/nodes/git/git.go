@@ -436,8 +436,11 @@ func prepareSSHKey(workspace string, privateKey string) (authContext, error) {
 		os.RemoveAll(dir)
 		return authContext{}, err
 	}
-	// Use forward slashes: %q would double-escape Windows backslashes, making the path unresolvable.
-	sshKeyPath := strings.ReplaceAll(keyFile, `\`, `/`)
+	// Make absolute then convert to forward slashes.
+	// Relative workspace paths produce relative keyFile paths that SSH cannot resolve.
+	// %q would also double-escape Windows backslashes.
+	absKeyFile, _ := filepath.Abs(keyFile)
+	sshKeyPath := strings.ReplaceAll(absKeyFile, `\`, `/`)
 	sshCommand := fmt.Sprintf(`ssh -i "%s" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new`, sshKeyPath)
 	return authContext{
 		env:     []string{"GIT_TERMINAL_PROMPT=0", "GIT_SSH_COMMAND=" + sshCommand},
