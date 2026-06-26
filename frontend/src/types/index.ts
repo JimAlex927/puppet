@@ -1,5 +1,11 @@
 export type Status = 'pending' | 'running' | 'success' | 'failed' | 'canceled' | 'timeout' | 'skipped'
 
+export interface NodeOutput {
+  id: string
+  label: string
+  color?: string
+}
+
 export interface Project {
   id: number
   name: string
@@ -156,6 +162,7 @@ export interface NodeMetadata {
   description: string
   supportedOS: string[]
   fields: NodeField[]
+  outputs?: NodeOutput[]
 }
 
 export interface PipelineNode {
@@ -168,6 +175,7 @@ export interface PipelineNode {
   nextNodeId: string
   fallbackNodeId: string
   continueOnError: boolean
+  position?: { x: number; y: number }
 }
 
 export interface InputSource {

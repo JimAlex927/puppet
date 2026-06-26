@@ -1,111 +1,86 @@
 <template>
-  <div v-loading="loading">
-    <!-- ── Header ──────────────────────────────────────────────────── -->
-    <div class="page-actions" style="align-items: flex-start; margin-bottom: 12px">
-      <div style="flex: 1; min-width: 0">
-        <el-breadcrumb separator="/" style="margin-bottom: 8px; font-size: 13px">
-          <el-breadcrumb-item :to="{ path: '/projects' }">项目</el-breadcrumb-item>
-          <el-breadcrumb-item v-if="task" :to="{ path: `/projects/${task.projectId}` }">
-            {{ projectName }}
-          </el-breadcrumb-item>
-          <el-breadcrumb-item>Pipeline</el-breadcrumb-item>
-        </el-breadcrumb>
-        <el-input
-          v-model="taskForm.name"
-          placeholder="任务名称"
-          size="large"
-          style="width: 320px; font-weight: 600"
-        />
-      </div>
-      <el-space style="flex-shrink: 0; margin-top: 28px">
-        <el-segmented v-model="viewMode" :options="viewOptions" />
-        <el-button :icon="Setting" @click="settingsVisible = true">任务设置</el-button>
-        <el-button :icon="Back" @click="goBack">返回</el-button>
-        <el-button type="primary" :icon="DocumentChecked" :loading="saving" @click="save">
+  <div class="editor-page" v-loading="loading" element-loading-background="#1a1b23">
+    <!-- ── Top bar ─────────────────────────────────────────────────── -->
+    <header class="editor-bar">
+      <el-breadcrumb separator="/" class="editor-breadcrumb">
+        <el-breadcrumb-item :to="{ path: '/projects' }">项目</el-breadcrumb-item>
+        <el-breadcrumb-item v-if="task" :to="{ path: `/projects/${task.projectId}` }">
+          {{ projectName }}
+        </el-breadcrumb-item>
+        <el-breadcrumb-item>Pipeline</el-breadcrumb-item>
+      </el-breadcrumb>
+
+      <el-input
+        v-model="taskForm.name"
+        placeholder="任务名称"
+        size="small"
+        class="editor-title-input"
+      />
+
+      <el-space>
+        <el-button size="small" :icon="Setting" @click="settingsVisible = true">设置</el-button>
+        <el-button size="small" :icon="Back" @click="goBack">返回</el-button>
+        <el-button size="small" type="primary" :icon="DocumentChecked" :loading="saving" @click="onSave">
           保存
         </el-button>
       </el-space>
+    </header>
+
+    <!-- ── Editor area: palette + canvas + config ──────────────────── -->
+    <div v-if="pipeline" class="editor-body">
+      <NodePalette :node-types="nodeTypes" />
+
+      <PipelineCanvas
+        ref="canvasRef"
+        @connect="handleConnect"
+        @edges-delete="(d) => handleEdgesDelete(d.map(x => [x.sourceId, x.sourceHandle] as [string, string]))"
+        @nodes-delete="handleNodesDelete"
+        @node-click="selectedNodeId = $event"
+        @pane-click="selectedNodeId = null"
+        @node-drop="onNodeDrop"
+      />
+
+      <NodeConfigDrawer
+        :node="selectedNode"
+        :metadata="selectedMetadata"
+        :credentials="credentials"
+        @close="selectedNodeId = null"
+      />
     </div>
 
-    <!-- ── Pipeline Config Strip ──────────────────────────────────── -->
-    <div v-if="pipeline" class="panel pipeline-strip">
-      <el-form :inline="true" style="margin: 0">
-        <el-form-item label="Agent" style="margin-bottom: 0">
-          <el-select v-model="pipeline.agentSelector.labels" multiple style="width: 200px">
+    <!-- ── Task settings drawer ───────────────────────────────────── -->
+    <el-drawer
+      v-model="settingsVisible"
+      title="任务设置"
+      direction="rtl"
+      size="360px"
+      :append-to-body="true"
+    >
+      <el-form label-position="top">
+        <el-form-item label="描述">
+          <el-input v-model="taskForm.description" type="textarea" :rows="4" />
+        </el-form-item>
+        <el-form-item label="超时时间 (秒)">
+          <el-input-number v-model="taskForm.timeoutSeconds" :min="0" style="width: 100%" />
+          <div class="muted" style="margin-top: 6px; font-size: 12px">0 表示不限制</div>
+        </el-form-item>
+        <el-form-item label="允许并发执行">
+          <el-switch v-model="taskForm.allowConcurrent" />
+        </el-form-item>
+        <el-form-item label="Agent">
+          <el-select v-model="pipeline!.agentSelector.labels" multiple style="width: 100%">
             <el-option label="local" value="local" />
           </el-select>
         </el-form-item>
-        <el-form-item label="起始节点" style="margin-bottom: 0">
-          <el-select
-            v-model="pipeline.startNodeId"
-            clearable
-            placeholder="默认第一个节点"
-            style="width: 240px"
-          >
+        <el-form-item label="起始节点">
+          <el-select v-model="pipeline!.startNodeId" clearable style="width: 100%">
             <el-option
-              v-for="n in pipeline.nodes"
+              v-for="n in pipeline!.nodes"
               :key="n.id"
               :label="`${n.name} (${n.id})`"
               :value="n.id"
             />
           </el-select>
-        </el-form-item>
-      </el-form>
-    </div>
-
-    <!-- ── Editor Layout ──────────────────────────────────────────── -->
-    <div v-if="pipeline" class="pipeline-layout" style="margin-top: 16px">
-      <!-- Left: Node Palette -->
-      <NodePalette :node-types="nodeTypes" @add="addNode" />
-
-      <!-- Center: List or Canvas -->
-      <PipelineListView
-        v-if="viewMode === 'list'"
-        :pipeline="pipeline"
-        :source-types="sourceTypes"
-        :credentials="credentials"
-        :selected-node-id="selectedNodeId"
-        @update:selected-node-id="selectedNodeId = $event"
-        @remove="removeNode"
-        @move="moveNode"
-        @add-input="addInput"
-      />
-      <PipelineCanvasView
-        v-else
-        :pipeline="pipeline"
-        :selected-node-id="selectedNodeId"
-        @update:selected-node-id="selectedNodeId = $event"
-      />
-
-      <!-- Right: Config Panel -->
-      <NodeConfigPanel
-        :node="selectedNode"
-        :metadata="selectedMetadata"
-        :nodes="pipeline.nodes"
-        :credentials="credentials"
-      />
-    </div>
-
-    <!-- ── Task Settings Drawer ───────────────────────────────────── -->
-    <el-drawer v-model="settingsVisible" title="任务设置" direction="rtl" size="360px">
-      <el-form label-position="top" style="padding: 0 4px">
-        <el-form-item label="描述">
-          <el-input
-            v-model="taskForm.description"
-            type="textarea"
-            :rows="4"
-            placeholder="任务描述（可选）"
-          />
-        </el-form-item>
-        <el-form-item label="超时时间 (秒)">
-          <el-input-number v-model="taskForm.timeoutSeconds" :min="0" style="width: 100%" />
-          <div class="muted" style="margin-top: 6px; font-size: 12px">0 表示不限制超时</div>
-        </el-form-item>
-        <el-form-item label="允许并发执行">
-          <el-switch v-model="taskForm.allowConcurrent" />
-          <span class="muted" style="margin-left: 10px; font-size: 12px">
-            {{ taskForm.allowConcurrent ? '同一任务可同时运行多次' : '同一时间只允许运行一次' }}
-          </span>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -116,62 +91,136 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Back, DocumentChecked, List, Operation, Setting } from '@element-plus/icons-vue'
-import { usePipeline } from '@/composables/usePipeline'
-import NodeConfigPanel from '@/components/PipelineEditor/NodeConfigPanel.vue'
-import NodePalette from '@/components/PipelineEditor/NodePalette.vue'
-import PipelineCanvasView from '@/components/PipelineEditor/PipelineCanvasView.vue'
-import PipelineListView from '@/components/PipelineEditor/PipelineListView.vue'
+import { Back, DocumentChecked, Setting } from '@element-plus/icons-vue'
+import { usePipelineEditor } from '@/composables/usePipelineEditor'
+import NodePalette from '@/components/canvas/NodePalette.vue'
+import PipelineCanvas from '@/components/canvas/PipelineCanvas.vue'
+import NodeConfigDrawer from '@/components/canvas/NodeConfigDrawer.vue'
+import type { NodeMetadata } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
 const taskId = Number(route.params.id)
 
 const {
-  pipeline,
-  task,
-  projectName,
-  nodeTypes,
-  sourceTypes,
-  credentials,
-  loading,
-  saving,
-  selectedNodeId,
-  selectedNode,
-  selectedMetadata,
+  pipeline, task, projectName, nodeTypes, credentials,
+  loading, saving,
+  selectedNodeId, selectedNode, selectedMetadata,
   taskForm,
-  load,
-  addNode,
-  removeNode,
-  moveNode,
-  addInput,
-  save,
-} = usePipeline(taskId)
+  load, buildFlowElements,
+  handleConnect, handleEdgesDelete, handleNodesDelete,
+  createPipelineNode, save,
+} = usePipelineEditor(taskId)
 
-const viewMode = ref<'list' | 'canvas'>('list')
+const canvasRef = ref<InstanceType<typeof PipelineCanvas>>()
 const settingsVisible = ref(false)
 
-const viewOptions = [
-  { label: '列表', value: 'list', icon: List },
-  { label: '流程图', value: 'canvas', icon: Operation },
-]
+// Init canvas once pipeline + canvas are both ready
+watch([pipeline, () => !!canvasRef.value], ([pl, ready]) => {
+  if (!pl || !ready) return
+  const { nodes, edges } = buildFlowElements()
+  canvasRef.value!.initCanvas(nodes, edges)
+}, { immediate: false })
+
+function onNodeDrop(meta: NodeMetadata, position: { x: number; y: number }) {
+  if (!pipeline.value) return
+  const { vfNode } = createPipelineNode(meta, position)
+  canvasRef.value?.addVFNode(vfNode)
+}
+
+async function onSave() {
+  const vfNodes = canvasRef.value?.getCurrentNodes()
+  await save(vfNodes)
+}
 
 function goBack() {
-  if (task.value) {
-    router.push(`/projects/${task.value.projectId}`)
-  } else {
-    router.back()
-  }
+  if (task.value) router.push(`/projects/${task.value.projectId}`)
+  else router.back()
 }
 
 onMounted(load)
 </script>
 
 <style scoped>
-.pipeline-strip {
-  padding: 10px 16px;
-  margin-bottom: 0;
+.editor-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 72px); /* subtract topbar */
+  margin: -22px; /* cancel main-panel padding */
+  background: #1a1b23;
+}
+
+.editor-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  height: 52px;
+  background: #1e1f2e;
+  border-bottom: 1px solid #2d2e3d;
+  flex-shrink: 0;
+}
+
+.editor-breadcrumb {
+  flex-shrink: 0;
+}
+
+:deep(.editor-breadcrumb .el-breadcrumb__item .el-breadcrumb__inner) {
+  color: #64748b !important;
+  font-size: 12px;
+}
+
+:deep(.editor-breadcrumb .el-breadcrumb__item .el-breadcrumb__inner.is-link:hover) {
+  color: #94a3b8 !important;
+}
+
+:deep(.editor-breadcrumb .el-breadcrumb__separator) { color: #3a3b4e !important; }
+
+.editor-title-input {
+  flex: 1;
+  max-width: 280px;
+}
+
+:deep(.editor-title-input .el-input__wrapper) {
+  background: #252633 !important;
+  box-shadow: none !important;
+  border: 1px solid #3a3b4e !important;
+}
+
+:deep(.editor-title-input .el-input__inner) {
+  color: #e2e8f0 !important;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+:deep(.editor-bar .el-button) {
+  background: #252633;
+  border-color: #3a3b4e;
+  color: #c4cad4;
+}
+
+:deep(.editor-bar .el-button:hover) {
+  background: #2d2e3d;
+  border-color: #4a4b5e;
+  color: #e2e8f0;
+}
+
+:deep(.editor-bar .el-button--primary) {
+  background: #0d9488 !important;
+  border-color: #0d9488 !important;
+  color: #fff !important;
+}
+
+:deep(.editor-bar .el-button--primary:hover) {
+  background: #0f766e !important;
+  border-color: #0f766e !important;
+}
+
+.editor-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
 }
 </style>

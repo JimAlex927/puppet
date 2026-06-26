@@ -1,38 +1,60 @@
 <template>
   <div>
     <div class="page-actions">
-      <div />
+      <div>
+        <h2 style="margin: 0">项目</h2>
+        <p class="muted">管理你的 pipeline 项目</p>
+      </div>
       <el-button type="primary" :icon="Plus" @click="openCreate">新建项目</el-button>
     </div>
-    <div class="panel">
-      <el-table :data="projects" empty-text="暂无项目">
-        <el-table-column prop="name" label="名称" min-width="180" />
-        <el-table-column prop="description" label="描述" min-width="260" />
-        <el-table-column label="创建时间" width="190">
-          <template #default="{ row }">{{ fmtDate(row.createdAt) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="$router.push(`/projects/${row.id}`)">进入</el-button>
-            <el-button link :icon="Edit" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="danger" :icon="Delete" @click="remove(row.id)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+
+    <div v-if="projects.length" class="project-grid">
+      <div
+        v-for="project in projects"
+        :key="project.id"
+        class="project-card"
+        @click="$router.push(`/projects/${project.id}`)"
+      >
+        <div class="pc-header">
+          <div class="pc-icon">
+            <el-icon :size="18"><FolderOpened /></el-icon>
+          </div>
+          <el-dropdown trigger="click" @click.stop>
+            <button class="pc-menu-btn" @click.stop>
+              <el-icon :size="16"><MoreFilled /></el-icon>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item @click.stop="openEdit(project)">编辑</el-dropdown-item>
+                <el-dropdown-item divided style="color: #ef4444" @click.stop="remove(project.id)">删除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+        <div class="pc-name">{{ project.name }}</div>
+        <div class="pc-desc">{{ project.description || '暂无描述' }}</div>
+        <div class="pc-footer">
+          <span class="pc-date">更新于 {{ fmtDate(project.updatedAt) }}</span>
+        </div>
+      </div>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="form.id ? '编辑项目' : '新建项目'" width="460px">
+    <el-empty v-else description="还没有项目，创建第一个吧" :image-size="80" />
+
+    <el-dialog v-model="dialogVisible" :title="editId ? '编辑项目' : '新建项目'" width="440px" @closed="resetForm">
       <el-form label-position="top">
-        <el-form-item label="名称">
-          <el-input v-model="form.name" />
+        <el-form-item label="项目名称" required>
+          <el-input v-model="form.name" placeholder="我的项目" />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="4" />
+          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="可选描述" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="save">保存</el-button>
+        <el-button type="primary" :loading="submitting" @click="save">
+          {{ editId ? '保存' : '创建' }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -40,7 +62,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { Delete, Edit, Plus } from '@element-plus/icons-vue'
+import { FolderOpened, MoreFilled, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@/api'
 import type { Project } from '@/types'
@@ -48,33 +70,51 @@ import { fmtDate } from '@/utils/format'
 
 const projects = ref<Project[]>([])
 const dialogVisible = ref(false)
-const form = reactive({ id: 0, name: '', description: '' })
+const submitting = ref(false)
+const editId = ref<number | null>(null)
+
+const form = reactive({ name: '', description: '' })
 
 async function load() {
   projects.value = await api.projects()
 }
 
+function resetForm() {
+  editId.value = null
+  Object.assign(form, { name: '', description: '' })
+}
+
 function openCreate() {
-  Object.assign(form, { id: 0, name: '', description: '' })
+  resetForm()
   dialogVisible.value = true
 }
 
-function openEdit(project: Project) {
-  Object.assign(form, { id: project.id, name: project.name, description: project.description })
+function openEdit(p: Project) {
+  editId.value = p.id
+  Object.assign(form, { name: p.name, description: p.description })
   dialogVisible.value = true
 }
 
 async function save() {
   if (!form.name.trim()) return ElMessage.warning('请输入项目名称')
-  if (form.id) await api.updateProject(form.id, form)
-  else await api.createProject(form)
-  dialogVisible.value = false
-  ElMessage.success('已保存')
-  await load()
+  submitting.value = true
+  try {
+    if (editId.value) {
+      await api.updateProject(editId.value, form)
+      ElMessage.success('已更新')
+    } else {
+      await api.createProject(form)
+      ElMessage.success('已创建')
+    }
+    dialogVisible.value = false
+    await load()
+  } finally {
+    submitting.value = false
+  }
 }
 
 async function remove(id: number) {
-  await ElMessageBox.confirm('确认删除该项目？')
+  await ElMessageBox.confirm('确认删除该项目？项目下的所有任务将一并删除。', '删除项目', { type: 'warning' })
   await api.deleteProject(id)
   ElMessage.success('已删除')
   await load()
@@ -82,3 +122,88 @@ async function remove(id: number) {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.project-card {
+  background: #fff;
+  border: 1px solid #dce4ef;
+  border-radius: 10px;
+  padding: 18px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.project-card:hover {
+  border-color: #2dd4bf;
+  box-shadow: 0 4px 16px rgba(45, 212, 191, 0.12);
+  transform: translateY(-1px);
+}
+
+.pc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.pc-icon {
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  background: #f0fdfb;
+  border: 1px solid #ccfbf1;
+  display: grid;
+  place-items: center;
+  color: #0d9488;
+}
+
+.pc-menu-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s, color 0.15s;
+}
+.pc-menu-btn:hover { background: #f1f5f9; color: #475569; }
+
+.pc-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2328;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pc-desc {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 36px;
+}
+
+.pc-footer {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.pc-date {
+  font-size: 11px;
+  color: #94a3b8;
+}
+</style>
