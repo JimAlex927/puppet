@@ -474,15 +474,16 @@ func isMetadataDirectory(path string) bool {
 }
 
 func resolvePath(workspace string, value string) string {
+	absWS, _ := filepath.Abs(workspace)
 	value = strings.TrimSpace(value)
-	if value == "" || value == "${workspace}" {
-		return workspace
+	if value == "" {
+		return absWS
 	}
-	value = strings.ReplaceAll(value, "${workspace}", workspace)
+	value = strings.ReplaceAll(value, "${workspace}", absWS)
 	if filepath.IsAbs(value) {
 		return value
 	}
-	return filepath.Join(workspace, value)
+	return filepath.Join(absWS, value)
 }
 
 func splitArgs(value string) ([]string, error) {

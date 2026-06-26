@@ -52,13 +52,14 @@ func (e *Executor) Validate(params map[string]any) error {
 
 func (e *Executor) Execute(ctx *node.NodeContext, params map[string]any) (*node.NodeResult, error) {
 	script := stringFrom(params["script"])
+	absWorkspace, _ := filepath.Abs(ctx.Workspace)
 	workdir := strings.TrimSpace(stringFrom(params["workdir"]))
-	if workdir == "" || workdir == "${workspace}" {
-		workdir = ctx.Workspace
+	if workdir == "" {
+		workdir = absWorkspace
 	}
-	workdir = strings.ReplaceAll(workdir, "${workspace}", ctx.Workspace)
+	workdir = strings.ReplaceAll(workdir, "${workspace}", absWorkspace)
 	if !filepath.IsAbs(workdir) {
-		workdir = filepath.Join(ctx.Workspace, workdir)
+		workdir = filepath.Join(absWorkspace, workdir)
 	}
 	if err := os.MkdirAll(workdir, 0o755); err != nil {
 		return nil, err

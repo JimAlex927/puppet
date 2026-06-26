@@ -445,24 +445,20 @@ func prepareSSHKey(workspace string, privateKey string) (authContext, error) {
 }
 
 func resolveTargetDir(workspace string, raw string) (string, error) {
+	absWS, _ := filepath.Abs(workspace)
 	if strings.TrimSpace(raw) == "" {
 		raw = "${workspace}/source"
 	}
-	raw = strings.ReplaceAll(raw, "${workspace}", workspace)
+	raw = strings.ReplaceAll(raw, "${workspace}", absWS)
 	raw = filepath.Clean(raw)
-	workspace = filepath.Clean(workspace)
-	if !filepath.IsAbs(raw) && !strings.HasPrefix(raw, workspace+string(filepath.Separator)) {
-		raw = filepath.Join(workspace, raw)
+	if !filepath.IsAbs(raw) {
+		raw = filepath.Join(absWS, raw)
 	}
 	abs, err := filepath.Abs(raw)
 	if err != nil {
 		return "", err
 	}
-	workspaceAbs, err := filepath.Abs(workspace)
-	if err != nil {
-		return "", err
-	}
-	rel, err := filepath.Rel(workspaceAbs, abs)
+	rel, err := filepath.Rel(absWS, abs)
 	if err != nil {
 		return "", err
 	}
