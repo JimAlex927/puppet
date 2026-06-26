@@ -436,7 +436,9 @@ func prepareSSHKey(workspace string, privateKey string) (authContext, error) {
 		os.RemoveAll(dir)
 		return authContext{}, err
 	}
-	sshCommand := fmt.Sprintf("ssh -i %q -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new", keyFile)
+	// Use forward slashes: %q would double-escape Windows backslashes, making the path unresolvable.
+	sshKeyPath := strings.ReplaceAll(keyFile, `\`, `/`)
+	sshCommand := fmt.Sprintf(`ssh -i "%s" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new`, sshKeyPath)
 	return authContext{
 		env:     []string{"GIT_TERMINAL_PROMPT=0", "GIT_SSH_COMMAND=" + sshCommand},
 		secrets: []string{privateKey, keyFile},
