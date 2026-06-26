@@ -22,6 +22,8 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 // BuildCommand returns a ready-to-start Cmd. The shell parameter selects which
@@ -113,8 +115,11 @@ func psCommand(ctx context.Context, bin string, bypassPolicy bool, script string
 	name := tmp.Name()
 	clean := func() { _ = os.Remove(name) }
 
-	// Force UTF-8 on both Console and pipeline output.
-	content := "[Console]::OutputEncoding = [Text.Encoding]::UTF8\n" +
+	// UTF-8 BOM tells PowerShell 5.1 to read the file as UTF-8 instead of
+	// system ANSI (GBK on Chinese Windows), preventing mojibake in non-ASCII paths.
+	const bom = "\xEF\xBB\xBF"
+	content := bom +
+		"[Console]::OutputEncoding = [Text.Encoding]::UTF8\n" +
 		"$OutputEncoding = [Text.Encoding]::UTF8\n" +
 		script
 	if _, err := tmp.WriteString(content); err != nil {
@@ -142,9 +147,16 @@ func cmdCommand(ctx context.Context, bin string, script string, extension string
 	name := tmp.Name()
 	clean := func() { _ = os.Remove(name) }
 
-	content := "@echo off\r\n@chcp 65001 >nul\r\n" +
+	// cmd.exe reads .cmd/.bat files using the system ANSI code page (GBK on
+	// Chinese Windows) regardless of chcp, so encode the file as GBK.
+	utf8Content := "@echo off\r\n@chcp 65001 >nul\r\n" +
 		strings.ReplaceAll(script, "\n", "\r\n") + "\r\n"
-	if _, err := tmp.WriteString(content); err != nil {
+	gbkBytes, err := simplifiedchinese.GBK.NewEncoder().Bytes([]byte(utf8Content))
+	if err != nil {
+		// Fall back to UTF-8 if encoding fails (non-Chinese content).
+		gbkBytes = []byte(utf8Content)
+	}
+	if _, err := tmp.Write(gbkBytes); err != nil {
 		tmp.Close()
 		clean()
 		return nil, func() {}, err
