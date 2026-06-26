@@ -26,12 +26,10 @@
 
   <!-- Output handles — shown in editor mode only -->
   <template v-if="!data.status">
-    <Handle id="next" type="source" :position="Position.Bottom" class="vf-handle vf-handle--next">
-      <span class="vf-handle-tip">成功</span>
-    </Handle>
-    <Handle id="fallback" type="source" :position="Position.Right" class="vf-handle vf-handle--fallback">
-      <span class="vf-handle-tip vf-handle-tip--right">失败</span>
-    </Handle>
+    <Handle id="next" type="source" :position="Position.Bottom" class="vf-handle vf-handle--next" />
+    <div class="cn-handle-label cn-handle-label--bottom">成功</div>
+    <Handle id="fallback" type="source" :position="Position.Right" class="vf-handle vf-handle--fallback" />
+    <div class="cn-handle-label cn-handle-label--right">失败</div>
   </template>
 </template>
 
@@ -163,44 +161,74 @@ const icon  = computed(() => CATEGORY[props.data?.category]?.icon  ?? CATEGORY.d
   margin-top: -4px;
 }
 
-/* Handles */
-:deep(.vf-handle) {
+/* Input handle — top, small grey dot */
+:deep(.vf-handle--in) {
   width: 10px;
   height: 10px;
   border: 2px solid #1a1b23;
   border-radius: 50%;
-  transition: transform 0.15s;
+  background: #64748b;
+  cursor: crosshair;
 }
 
-:deep(.vf-handle:hover) { transform: scale(1.5); }
-:deep(.vf-handle--in)       { background: #64748b; }
-:deep(.vf-handle--next)     { background: #2dd4bf; }
-:deep(.vf-handle--fallback) { background: #f87171; }
+/* Output handles — always-visible colored dots */
+:deep(.vf-handle--next),
+:deep(.vf-handle--fallback) {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2.5px solid #1a1b23;
+  cursor: crosshair;
+  transition: transform 0.15s, box-shadow 0.15s;
+  /* label badge below/beside the dot */
+  position: relative;
+}
 
-.vf-handle-tip {
+:deep(.vf-handle--next) {
+  background: #2dd4bf;
+  box-shadow: 0 0 0 2px rgba(45,212,191,0.3);
+}
+
+:deep(.vf-handle--fallback) {
+  background: #f87171;
+  box-shadow: 0 0 0 2px rgba(248,113,113,0.3);
+}
+
+:deep(.vf-handle--next:hover) {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 4px rgba(45,212,191,0.4);
+}
+
+:deep(.vf-handle--fallback:hover) {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 4px rgba(248,113,113,0.4);
+}
+
+/* Label badges beside the handles */
+.cn-handle-label {
   position: absolute;
-  bottom: calc(100% + 4px);
+  font-size: 10px;
+  font-weight: 600;
+  pointer-events: none;
+  white-space: nowrap;
+  background: #1e1f2e;
+  border: 1px solid #3a3b4e;
+  border-radius: 3px;
+  padding: 1px 5px;
+  line-height: 1.5;
+}
+
+.cn-handle-label--bottom {
+  bottom: -28px;
   left: 50%;
   transform: translateX(-50%);
-  background: #1e1f2e;
-  color: #94a3b8;
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s;
-  border: 1px solid #3a3b4e;
+  color: #2dd4bf;
 }
 
-.vf-handle-tip--right {
-  bottom: auto;
-  left: calc(100% + 4px);
+.cn-handle-label--right {
+  right: -36px;
   top: 50%;
   transform: translateY(-50%);
+  color: #f87171;
 }
-
-:deep(.vf-handle--next:hover) .vf-handle-tip,
-:deep(.vf-handle--fallback:hover) .vf-handle-tip { opacity: 1; }
 </style>
