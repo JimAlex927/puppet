@@ -38,7 +38,7 @@
           </el-select>
         </el-form-item>
         <el-divider />
-        <el-form-item v-for="field in metadata.fields" :key="field.name" :label="field.label">
+        <el-form-item v-for="field in visibleFields" :key="field.name" :label="field.label">
           <el-input
             v-if="field.type === 'input'"
             v-model="params[field.name]"
@@ -92,7 +92,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Credential, NodeMetadata, PipelineNode } from '@/types'
+import type { Credential, NodeField, NodeMetadata, PipelineNode } from '@/types'
 
 const props = defineProps<{
   node?: PipelineNode
@@ -102,9 +102,15 @@ const props = defineProps<{
 }>()
 
 const params = computed(() => props.node?.params || {})
+const visibleFields = computed(() => (props.metadata?.fields || []).filter(isFieldVisible))
 const targetOptions = computed(() =>
   (props.nodes || []).filter((item) => item.id !== props.node?.id),
 )
+
+function isFieldVisible(field: NodeField) {
+  if (!field.showWhen) return true
+  return params.value[field.showWhen.field] === field.showWhen.equals
+}
 </script>
 
 <style scoped>

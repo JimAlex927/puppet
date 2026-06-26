@@ -30,9 +30,17 @@
         <el-table-column label="耗时" width="100">
           <template #default="{ row }">{{ fmtDuration(row.durationMs) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="$router.push(`/runs/${row.id}`)">详情</el-button>
+            <el-button
+              v-if="canCancel(row.status)"
+              link
+              type="danger"
+              @click="cancelRun(row.id)"
+            >
+              取消
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -46,6 +54,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Back, VideoPlay } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@/api'
 import RunTaskDialog from '@/components/RunTaskDialog.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -66,6 +75,17 @@ async function load() {
 
 function onRunSuccess(run: TaskRun) {
   router.push(`/runs/${run.id}`)
+}
+
+function canCancel(status: string) {
+  return status === 'pending' || status === 'running'
+}
+
+async function cancelRun(runId: number) {
+  await ElMessageBox.confirm('确认取消这个执行记录？')
+  await api.cancelTaskRun(runId)
+  ElMessage.success('已取消')
+  await load()
 }
 
 function inputSummary(inputJson: string): string {

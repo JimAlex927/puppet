@@ -38,7 +38,7 @@ func (e *Executor) Metadata() node.NodeMetadata {
 				Label:   "Shell",
 				Type:    "select",
 				Default: "auto",
-				Options: []string{"auto", "pwsh", "powershell", "cmd", "sh", "bash"},
+				Options: []string{"auto", "pwsh", "powershell", "cmd", "bat", "sh", "bash"},
 			},
 			{
 				Name:    "timeoutSeconds",

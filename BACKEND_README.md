@@ -10,11 +10,24 @@ go run ./cmd/server
 
 启动时会自动：
 
+- 启动 API 服务，默认 `:8080`
+- 启动内嵌前端服务，默认 `:5173`
 - 创建 SQLite 数据库和数据表
-- 注册 `shell`、`sleep`、`http`、`git` 四个内置节点
+- 注册 `shell`、`sleep`、`http`、`git`、`process` 内置节点
 - 创建或更新 `local-agent`
 - 创建默认管理员 `puppetadmin / puppetadmin`
 - 初始化一个 Demo Project 和 Demo Task
+
+前端静态资源通过 Go `embed` 打进 server exe。构建 exe 前需要先执行：
+
+```powershell
+cd frontend
+npm run build
+cd ..
+go build -o puppet-server.exe ./cmd/server
+```
+
+内嵌前端服务会把 `/api/*` 反向代理到 `PUPPET_SERVER_URL`，所以浏览器访问前端端口即可使用完整系统。
 
 ## 核心接口
 
@@ -67,6 +80,46 @@ ${version}
 执行前会替换占位符，NodeRun 的 `params_snapshot_json` 保存替换后的参数。
 
 节点执行中的日志会写入 `run_logs`，同时发布到 `internal/logstream`，供 SSE 连接实时消费。
+
+## Process 节点
+
+`internal/nodes/process` 提供 Windows 和 Linux 进程管理能力，注册为 `process_start` 和 `process_stop` 两个节点。启动时不通过 `cmd start`，而是由节点执行器直接调用 `exec.Command`，启动后记录：
+
+- PID
+- 进程名
+- 可执行文件路径
+- 命令行
+- 进程启动时间
+- stdout/stderr 日志文件
+- metadata 文件路径
+
+`workdir` 只表示进程启动时的工作目录，默认 `${workspace}`。metadata 和 stdout/stderr 日志默认写到当前 TaskRun 的 `${workspace}/processes/<name>.json` / `${workspace}/processes/*.log`。停止时推荐使用启动节点输出的 `${node.<nodeId>.metadataPath}`。节点会重新读取当前 PID 对应的进程，并校验进程名、可执行路径、启动时间，确认不是 PID 复用后才停止。
+
+真实系统进程名由节点从 `executable` 推导并在启动后写入 metadata，不作为用户配置项暴露。
+
+如果停止节点没有配置 `metadataPath`，会用当前 TaskRun 的 `workspace + name` 查找默认 metadata：
+
+```text
+${workspace}/processes/<name>.json
+```
+
+跨 TaskRun 停止同一个应用时，应该显式填写固定 `metadataPath`，因为每次 TaskRun 的 `${workspace}` 都不同。
+
+`metadataPath` 可以是文件路径，也可以是目录路径。如果是目录路径，实际 metadata 文件为：
+
+```text
+<metadataPath>/<name>.json
+```
+
+平台实现：
+
+- Windows: `Get-CimInstance Win32_Process` 查询身份，`taskkill` 停止进程
+- Linux: `/proc/<pid>` 查询身份，`/proc/net/tcp*` 查询端口，`SIGTERM` / `SIGKILL` 停止进程
+
+`Process Stop` 通过 `Stop By` 下拉框选择一种停止方式，界面只展示对应方式需要的配置：
+
+- `metadata`: 推荐方式。配置 `name` 和 `metadataPath`，可以校验 PID 身份，避免 PID 复用误杀
+- `port`: 清理方式。停止监听指定端口的进程，没有 metadata 身份校验
 
 ## 配置节点
 

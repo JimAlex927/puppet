@@ -37,6 +37,9 @@ type Engine struct {
 
 	logMu sync.Mutex
 	next  map[uint]int
+
+	runMu   sync.Mutex
+	cancels map[uint]context.CancelFunc
 }
 
 func New(db *gorm.DB, registry *node.Registry, hub *logstream.Hub, cfg config.Config) *Engine {
@@ -48,6 +51,7 @@ func New(db *gorm.DB, registry *node.Registry, hub *logstream.Hub, cfg config.Co
 		creds:    credential.NewService(db),
 		agents:   agent.NewService(db),
 		next:     map[uint]int{},
+		cancels:  map[uint]context.CancelFunc{},
 	}
 }
 
@@ -90,11 +94,36 @@ func (e *Engine) StartTask(ctx context.Context, taskID uint, triggerType string,
 		return model.TaskRun{}, err
 	}
 
-	go e.execute(context.Background(), task, run, pipeline)
+	runCtx, cancel := context.WithCancel(context.Background())
+	e.registerCancel(run.ID, cancel)
+	go e.execute(runCtx, task, run, pipeline)
 	return run, nil
 }
 
+func (e *Engine) CancelTaskRun(taskRunID uint) bool {
+	e.runMu.Lock()
+	cancel, ok := e.cancels[taskRunID]
+	e.runMu.Unlock()
+	if ok {
+		cancel()
+	}
+	return ok
+}
+
+func (e *Engine) registerCancel(taskRunID uint, cancel context.CancelFunc) {
+	e.runMu.Lock()
+	e.cancels[taskRunID] = cancel
+	e.runMu.Unlock()
+}
+
+func (e *Engine) unregisterCancel(taskRunID uint) {
+	e.runMu.Lock()
+	delete(e.cancels, taskRunID)
+	e.runMu.Unlock()
+}
+
 func (e *Engine) execute(parent context.Context, task model.Task, run model.TaskRun, pipeline node.PipelineDefinition) {
+	defer e.unregisterCancel(run.ID)
 	ctx := parent
 	cancel := func() {}
 	if task.TimeoutSeconds > 0 {
@@ -209,6 +238,8 @@ func (e *Engine) execute(parent context.Context, task model.Task, run model.Task
 		s := model.TaskRunFailed
 		if errors.Is(taskErr, context.DeadlineExceeded) {
 			s = model.TaskRunTimeout
+		} else if errors.Is(taskErr, context.Canceled) {
+			s = model.TaskRunCanceled
 		}
 		e.finishTask(&run, s, startedAt, taskErr.Error())
 		return
@@ -435,6 +466,8 @@ func (e *Engine) executeNode(ctx context.Context, taskRunID uint, nodeRun model.
 		status := model.NodeRunFailed
 		if errors.Is(lastErr, context.DeadlineExceeded) {
 			status = model.NodeRunTimeout
+		} else if errors.Is(lastErr, context.Canceled) {
+			status = model.NodeRunCanceled
 		}
 		nodeRun.Status = status
 		nodeRun.ErrorMessage = lastErr.Error()
@@ -506,14 +539,18 @@ func (e *Engine) executeRemoteNode(ctx context.Context, taskRunID uint, nodeRun 
 	}
 
 	if lastErr != nil {
-		nodeRun.Status = model.NodeRunFailed
+		status := model.NodeRunFailed
+		if errors.Is(lastErr, context.Canceled) {
+			status = model.NodeRunCanceled
+		}
+		nodeRun.Status = status
 		nodeRun.ErrorMessage = lastErr.Error()
 		if err := e.db.Save(&nodeRun).Error; err != nil {
 			log.Printf("engine: save nodeRun error: %v", err)
 		}
 		e.publishNodeStatus(taskRunID, nodeRun)
 		e.appendLog(taskRunID, nodeRun.ID, "system", fmt.Sprintf("[node:failed] %s (%s) duration=%dms error=%v\n", pipelineNode.Name, pipelineNode.ID, nodeRun.DurationMS, lastErr))
-		return model.NodeRunFailed, nil, lastErr
+		return status, nil, lastErr
 	}
 
 	nodeRun.Status = model.NodeRunSuccess

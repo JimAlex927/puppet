@@ -21,13 +21,13 @@ SQLite 驱动使用纯 Go 实现，Windows 下不依赖 cgo / gcc。
 
 ## 启动
 
-后端：
+开发模式可以分别启动后端和 Vite：
 
 ```powershell
 go run ./cmd/server
 ```
 
-默认监听 `http://localhost:8080`，数据库文件位于 `data/puppet.db`。
+默认 API 监听 `http://localhost:8080`，内嵌前端监听 `http://localhost:5173`，数据库文件位于 `data/puppet.db`。
 
 默认管理员：
 
@@ -36,7 +36,7 @@ username: puppetadmin
 password: puppetadmin
 ```
 
-前端：
+开发前端：
 
 ```powershell
 cd frontend
@@ -45,6 +45,31 @@ npm run dev
 ```
 
 默认访问 `http://localhost:5173`，Vite 会把 `/api` 代理到后端。
+
+## 打包为单个 exe
+
+后端 exe 会嵌入 `frontend/dist`，并在运行时同时启动两个端口：
+
+- `PUPPET_HTTP_ADDR`: API 端口，默认 `:8080`
+- `PUPPET_FRONTEND_ADDR`: 前端页面端口，默认 `:5173`
+
+构建顺序：
+
+```powershell
+cd frontend
+npm install
+npm run build
+cd ..
+go build -o puppet-server.exe ./cmd/server
+```
+
+启动：
+
+```powershell
+.\puppet-server.exe
+```
+
+访问 `http://localhost:5173`。这个前端端口内置 `/api` 反向代理，会转发到 `PUPPET_SERVER_URL`，默认 `http://localhost:8080`。
 
 ## 验证
 
@@ -83,6 +108,7 @@ frontend           Vue 管理台
 - `sleep`: 等待指定秒数
 - `http`: 发送 HTTP 请求，2xx 判定成功
 - `git`: Git Checkout，只负责把指定仓库和 ref 检出到 workspace；支持 HTTPS 和 SSH 两种 transport
+- `process`: 启动或停止进程；启动时记录 PID 和进程身份 metadata，停止时校验身份后再停止，降低 PID 复用误杀风险
 
 ## Task 运行配置
 
@@ -100,6 +126,13 @@ Task 支持类似 Jenkins `Build with Parameters` 的运行配置。点击执行
 ```text
 ${input.version}
 ${version}
+```
+
+节点参数也可以引用前面节点的输出：
+
+```text
+${node.startProcess.metadataPath}
+${node.startProcess.pid}
 ```
 
 执行前引擎会把这些占位符替换成用户在运行弹窗里选择或填写的值，并把替换后的参数写入 NodeRun 快照。
@@ -146,6 +179,65 @@ Git 节点执行时会打印 checkout plan、脱敏后的 git 命令、checkout 
 - `reuse`: 不主动清理，直接尝试 fetch/checkout，可能因为脏工作区失败
 
 凭据 secret 会以 AES-GCM 加密 blob 存入 SQLite。开发环境如果未设置 `PUPPET_SECRET_KEY` 会使用本地默认密钥；正式使用请设置稳定且保密的 `PUPPET_SECRET_KEY`，否则更换密钥后历史凭据无法解密。
+
+## Process 节点
+
+Process 节点用于管理长期运行的本机进程，第一版支持 Windows 和 Linux。节点拆成两个：
+
+- `Process Start`: 使用 Go `exec.Command` 直接启动进程，不通过 `cmd start`
+- `Process Stop`: 停止进程
+- `workdir`: 只表示进程启动时的工作目录，默认 `${workspace}`
+- 启动后会在当前 TaskRun 的 `${workspace}/processes` 下写入 metadata，例如 `data/workspaces/taskrun-1/processes/app.json`
+- 真实系统进程名由平台从 `executable` 推导并写入 metadata，不需要用户配置
+- NodeRun 输出包含 `pid`、`metadataPath`、`stdoutLog`、`stderrLog`
+- `Process Stop` 通过 `Stop By` 下拉框选择一种停止方式：`metadata` 或 `port`
+- `metadata` 方式会先校验 PID 当前对应的进程名、可执行路径、启动时间，再停止进程
+
+Windows 停止进程使用 `taskkill`，进程身份来自 `Get-CimInstance Win32_Process`。
+
+Linux 停止进程使用 `SIGTERM` / `SIGKILL`，进程身份来自 `/proc/<pid>/comm`、`/proc/<pid>/exe`、`/proc/<pid>/cmdline`、`/proc/<pid>/stat` 和 kernel `boot_id`。
+
+推荐 Pipeline 用法：
+
+1. 添加 `Process Start` 节点，ID 例如 `startApp`
+2. 添加 `Process Stop` 节点，`Stop By` 选择 `metadata`，`metadataPath` 填：
+
+```text
+${node.startApp.metadataPath}
+```
+
+如果是同一个 TaskRun 里停止前面启动的应用，可以让 `metadataPath` 留空，并保持 `name` 一致；节点会默认读取：
+
+```text
+${workspace}/processes/<name>.json
+```
+
+如果是跨 TaskRun 停止同一个应用，`${workspace}` 每次都不同，应该显式填写一个固定 `metadataPath`，例如：
+
+```text
+C:\apps\my-app\.puppet\app.json
+```
+
+`metadataPath` 也可以填写目录；如果填的是目录，节点会自动使用：
+
+```text
+<metadataPath>/<name>.json
+```
+
+例如 `metadataPath=C:\apps\my-app\.puppet` 且 `name=nats-server`，实际文件是 `C:\apps\my-app\.puppet\nats-server.json`。
+
+启动前如果发现同名进程或端口已被占用，`ifAlreadyRunning` 支持：
+
+- `fail`: 直接失败
+- `stop`: 先停止匹配进程再启动
+- `allow`: 不处理，继续启动
+
+如果没有 metadata，也可以把 `Stop By` 选择为 `port`，按端口停止正在监听该端口的进程；这种方式适合清理场景，但没有 metadata 校验那么安全。
+
+`Process Stop` 的停止方式：
+
+- `metadata`: 推荐方式。配置 `name` 和 `metadataPath`。可以校验 PID 身份，避免 PID 复用误杀
+- `port`: 清理方式。停止监听指定端口的进程，没有 metadata 身份校验
 
 ## 环境变量
 

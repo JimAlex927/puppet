@@ -41,6 +41,9 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 	); err != nil {
 		return nil, err
 	}
+	if err := reconcileInterruptedRuns(database); err != nil {
+		return nil, err
+	}
 	if err := seedDefaultUser(database); err != nil {
 		return nil, err
 	}
@@ -51,6 +54,26 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 		return nil, err
 	}
 	return database, nil
+}
+
+func reconcileInterruptedRuns(database *gorm.DB) error {
+	now := time.Now()
+	if err := database.Model(&model.TaskRun{}).
+		Where("status IN ?", []string{model.TaskRunPending, model.TaskRunRunning}).
+		Updates(map[string]any{
+			"status":        model.TaskRunCanceled,
+			"finished_at":   now,
+			"error_message": "canceled because server restarted while run was active",
+		}).Error; err != nil {
+		return err
+	}
+	return database.Model(&model.NodeRun{}).
+		Where("status IN ?", []string{model.NodeRunPending, model.NodeRunRunning}).
+		Updates(map[string]any{
+			"status":        model.NodeRunCanceled,
+			"finished_at":   now,
+			"error_message": "canceled because server restarted while run was active",
+		}).Error
 }
 
 func seedDefaultUser(database *gorm.DB) error {

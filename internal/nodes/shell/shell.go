@@ -37,7 +37,7 @@ func (e *Executor) Metadata() node.NodeMetadata {
 				Label:   "Shell",
 				Type:    "select",
 				Default: "auto",
-				Options: []string{"auto", "pwsh", "powershell", "cmd", "sh", "bash"},
+				Options: []string{"auto", "pwsh", "powershell", "cmd", "bat", "sh", "bash"},
 			},
 		},
 	}
@@ -96,9 +96,10 @@ func (e *Executor) Execute(ctx *node.NodeContext, params map[string]any) (*node.
 	wg.Add(2)
 	go scan(stdout, "stdout", ctx.Log, &wg)
 	go scan(stderr, "stderr", ctx.Log, &wg)
-	wg.Wait()
 
-	if err := cmd.Wait(); err != nil {
+	err = cmd.Wait()
+	wg.Wait()
+	if err != nil {
 		return nil, err
 	}
 	return &node.NodeResult{Output: map[string]any{"workdir": workdir}}, nil

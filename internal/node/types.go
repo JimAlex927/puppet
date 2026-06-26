@@ -19,13 +19,19 @@ type NodeMetadata struct {
 }
 
 type NodeField struct {
-	Name     string   `json:"name"`
-	Label    string   `json:"label"`
-	Type     string   `json:"type"`
-	Required bool     `json:"required"`
-	Default  any      `json:"default,omitempty"`
-	Options  []string `json:"options,omitempty"`
-	Secret   bool     `json:"secret,omitempty"`
+	Name     string              `json:"name"`
+	Label    string              `json:"label"`
+	Type     string              `json:"type"`
+	Required bool                `json:"required"`
+	Default  any                 `json:"default,omitempty"`
+	Options  []string            `json:"options,omitempty"`
+	Secret   bool                `json:"secret,omitempty"`
+	ShowWhen *NodeFieldCondition `json:"showWhen,omitempty"`
+}
+
+type NodeFieldCondition struct {
+	Field  string `json:"field"`
+	Equals any    `json:"equals"`
 }
 
 type NodeContext struct {

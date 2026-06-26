@@ -18,6 +18,7 @@ import (
 	"puppet/internal/node"
 	"puppet/internal/nodes/git"
 	httpnode "puppet/internal/nodes/http"
+	processnode "puppet/internal/nodes/process"
 	"puppet/internal/nodes/shell"
 	"puppet/internal/nodes/sleep"
 
@@ -52,6 +53,8 @@ func main() {
 	cfg.registry.Register(sleep.New())
 	cfg.registry.Register(httpnode.New())
 	cfg.registry.Register(git.New())
+	cfg.registry.Register(processnode.NewStart())
+	cfg.registry.Register(processnode.NewStop())
 
 	go heartbeatLoop(cfg)
 

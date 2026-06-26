@@ -143,6 +143,10 @@ export interface NodeField {
   default?: unknown
   options?: string[]
   secret?: boolean
+  showWhen?: {
+    field: string
+    equals: unknown
+  }
 }
 
 export interface NodeMetadata {

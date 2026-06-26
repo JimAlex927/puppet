@@ -8,7 +8,10 @@
           <span v-if="run?.errorMessage" style="margin-left: 8px; color: #ef4444">{{ run.errorMessage }}</span>
         </p>
       </div>
-      <el-button :icon="Refresh" @click="load">刷新</el-button>
+      <el-space>
+        <el-button :icon="Refresh" @click="load">刷新</el-button>
+        <el-button v-if="run && canCancel(run.status)" type="danger" @click="cancelRun">取消</el-button>
+      </el-space>
     </div>
 
     <div v-if="run" class="run-meta-grid">
@@ -77,6 +80,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { Refresh } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@/api'
 import RunLogViewer from '@/components/RunLogViewer.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -118,6 +122,17 @@ async function load() {
   run.value = runData
   nodeRuns.value = nodeData
   logs.value = logData
+}
+
+function canCancel(status: string) {
+  return status === 'pending' || status === 'running'
+}
+
+async function cancelRun() {
+  await ElMessageBox.confirm('确认取消这个执行记录？')
+  run.value = await api.cancelTaskRun(runId)
+  ElMessage.success('已取消')
+  await load()
 }
 
 function connect() {

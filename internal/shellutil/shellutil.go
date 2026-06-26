@@ -1,12 +1,14 @@
 // Package shellutil builds exec.Cmd values for running shell scripts portably.
 //
 // Shell selection (the shell parameter):
-//   ""  / "auto"  – auto-detect: pwsh → powershell → cmd on Windows; sh on Unix
-//   "pwsh"        – PowerShell 7+  (Windows/Linux/macOS)
-//   "powershell"  – Windows PowerShell 5.1
-//   "cmd"         – Windows Command Prompt
-//   "sh"          – POSIX sh
-//   "bash"        – Bash
+//
+//	""  / "auto"  – auto-detect: pwsh → powershell → cmd on Windows; sh on Unix
+//	"pwsh"        – PowerShell 7+  (Windows/Linux/macOS)
+//	"powershell"  – Windows PowerShell 5.1
+//	"cmd"         – Windows Command Prompt
+//	"bat"         – Windows batch file via cmd.exe
+//	"sh"          – POSIX sh
+//	"bash"        – Bash
 //
 // On Windows, scripts are always written to a temp file so that multi-line
 // scripts, special characters, and non-ASCII text work correctly.
@@ -73,12 +75,16 @@ func buildExplicit(ctx context.Context, script, shell string) (*exec.Cmd, func()
 		}
 		return psCommand(ctx, bin, true, script)
 
-	case "cmd":
+	case "cmd", "bat":
 		bin, err := exec.LookPath("cmd")
 		if err != nil {
 			return nil, func() {}, fmt.Errorf("cmd not found in PATH")
 		}
-		return cmdCommand(ctx, bin, script)
+		extension := ".cmd"
+		if shell == "bat" {
+			extension = ".bat"
+		}
+		return cmdCommand(ctx, bin, script, extension)
 
 	case "sh", "bash", "zsh", "fish":
 		bin, err := exec.LookPath(shell)
@@ -126,10 +132,10 @@ func psCommand(ctx context.Context, bin string, bypassPolicy bool, script string
 	return exec.CommandContext(ctx, bin, args...), clean, nil
 }
 
-// cmdCommand runs the script via cmd.exe using a temp .cmd file.
+// cmdCommand runs the script via cmd.exe using a temp .cmd/.bat file.
 // @chcp 65001 switches the session to UTF-8 before the user script runs.
-func cmdCommand(ctx context.Context, bin string, script string) (*exec.Cmd, func(), error) {
-	tmp, err := os.CreateTemp("", "puppet-shell-*.cmd")
+func cmdCommand(ctx context.Context, bin string, script string, extension string) (*exec.Cmd, func(), error) {
+	tmp, err := os.CreateTemp("", "puppet-shell-*"+extension)
 	if err != nil {
 		return nil, func() {}, err
 	}

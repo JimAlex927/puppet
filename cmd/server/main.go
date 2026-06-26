@@ -2,7 +2,9 @@ package main
 
 import (
 	"log"
+	"net/http"
 
+	embeddedFrontend "puppet/frontend"
 	"puppet/internal/api"
 	"puppet/internal/config"
 	"puppet/internal/confignode"
@@ -14,8 +16,10 @@ import (
 	"puppet/internal/node"
 	"puppet/internal/nodes/git"
 	httpnode "puppet/internal/nodes/http"
+	processnode "puppet/internal/nodes/process"
 	"puppet/internal/nodes/shell"
 	"puppet/internal/nodes/sleep"
+	"puppet/internal/web"
 )
 
 func main() {
@@ -31,6 +35,8 @@ func main() {
 	registry.Register(sleep.New())
 	registry.Register(httpnode.New())
 	registry.Register(git.New())
+	registry.Register(processnode.NewStart())
+	registry.Register(processnode.NewStop())
 	configRegistry := confignode.NewRegistry()
 	configRegistry.Register(gitbranches.New())
 	configRegistry.Register(script.New())
@@ -39,8 +45,23 @@ func main() {
 	runner := engine.New(database, registry, hub, cfg)
 
 	router := api.NewRouter(database, registry, configRegistry, runner, hub)
-	log.Printf("puppet server listening on %s", cfg.HTTPAddr)
-	if err := router.Run(cfg.HTTPAddr); err != nil {
-		log.Fatalf("run server: %v", err)
+	go func() {
+		log.Printf("puppet api listening on %s", cfg.HTTPAddr)
+		if err := router.Run(cfg.HTTPAddr); err != nil {
+			log.Fatalf("run api server: %v", err)
+		}
+	}()
+
+	dist, err := embeddedFrontend.Dist()
+	if err != nil {
+		log.Fatalf("load embedded frontend: %v", err)
+	}
+	frontendHandler, err := web.NewHandler(dist, cfg.ServerURL)
+	if err != nil {
+		log.Fatalf("create frontend server: %v", err)
+	}
+	log.Printf("puppet frontend listening on %s, api proxy target %s", cfg.FrontendAddr, cfg.ServerURL)
+	if err := http.ListenAndServe(cfg.FrontendAddr, frontendHandler); err != nil {
+		log.Fatalf("run frontend server: %v", err)
 	}
 }

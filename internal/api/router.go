@@ -101,6 +101,7 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 			protected.POST("/tasks/:id/run", h.runTask)
 			protected.GET("/tasks/:id/runs", h.listTaskRuns)
 			protected.GET("/task-runs/:id", h.getTaskRun)
+			protected.POST("/task-runs/:id/cancel", h.cancelTaskRun)
 			protected.GET("/task-runs/:id/node-runs", h.listNodeRuns)
 			protected.GET("/task-runs/:id/logs", h.listRunLogs)
 			protected.GET("/task-runs/:id/events", h.taskRunEvents)
@@ -519,6 +520,74 @@ func (h *Handler) getTaskRun(c *gin.Context) {
 	respond(c, run, err)
 }
 
+func (h *Handler) cancelTaskRun(c *gin.Context) {
+	id := paramID(c, "id")
+	var run model.TaskRun
+	if err := h.db.First(&run, id).Error; err != nil {
+		respond(c, nil, err)
+		return
+	}
+	if taskRunDone(run.Status) {
+		ok(c, run)
+		return
+	}
+
+	h.engine.CancelTaskRun(run.ID)
+
+	now := time.Now()
+	var sequence int
+	if err := h.db.Transaction(func(tx *gorm.DB) error {
+		run.Status = model.TaskRunCanceled
+		run.FinishedAt = &now
+		if run.StartedAt != nil {
+			run.DurationMS = now.Sub(*run.StartedAt).Milliseconds()
+		}
+		run.ErrorMessage = "canceled by user"
+		if err := tx.Save(&run).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.NodeRun{}).
+			Where("task_run_id = ? AND status IN ?", run.ID, []string{model.NodeRunPending, model.NodeRunRunning}).
+			Updates(map[string]any{
+				"status":        model.NodeRunCanceled,
+				"finished_at":   now,
+				"error_message": "canceled by user",
+			}).Error; err != nil {
+			return err
+		}
+		sequence = nextLogSequence(tx, run.ID)
+		return tx.Create(&model.RunLog{
+			TaskRunID: run.ID,
+			Sequence:  sequence,
+			Stream:    "system",
+			Content:   "[task:canceled] canceled by user\n",
+		}).Error
+	}); err != nil {
+		respond(c, nil, err)
+		return
+	}
+
+	h.hub.Publish(run.ID, logstream.Event{
+		Type: "log",
+		Data: map[string]any{
+			"taskRunId": run.ID,
+			"nodeRunId": 0,
+			"stream":    "system",
+			"content":   "[task:canceled] canceled by user\n",
+			"sequence":  sequence,
+		},
+	})
+	h.hub.Publish(run.ID, logstream.Event{
+		Type: "task_status",
+		Data: map[string]any{
+			"taskRunId": run.ID,
+			"status":    run.Status,
+			"run":       run,
+		},
+	})
+	ok(c, run)
+}
+
 func (h *Handler) listNodeRuns(c *gin.Context) {
 	var runs []model.NodeRun
 	err := h.db.Where("task_run_id = ?", paramID(c, "id")).Order("node_index asc, id asc").Find(&runs).Error
@@ -746,4 +815,22 @@ func containsString(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func taskRunDone(status string) bool {
+	switch status {
+	case model.TaskRunSuccess, model.TaskRunFailed, model.TaskRunCanceled, model.TaskRunTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func nextLogSequence(db *gorm.DB, taskRunID uint) int {
+	var max int
+	_ = db.Model(&model.RunLog{}).
+		Where("task_run_id = ?", taskRunID).
+		Select("COALESCE(MAX(sequence), 0)").
+		Scan(&max).Error
+	return max + 1
 }

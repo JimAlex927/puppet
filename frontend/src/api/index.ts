@@ -54,6 +54,7 @@ export const api = {
     request<TaskRun>({ url: `/tasks/${taskId}/run`, method: 'POST', data: { input } }),
   taskRuns: (taskId: number) => request<TaskRun[]>({ url: `/tasks/${taskId}/runs` }),
   taskRun: (id: number) => request<TaskRun>({ url: `/task-runs/${id}` }),
+  cancelTaskRun: (id: number) => request<TaskRun>({ url: `/task-runs/${id}/cancel`, method: 'POST' }),
   nodeRuns: (runId: number) => request<NodeRun[]>({ url: `/task-runs/${runId}/node-runs` }),
   runLogs: (runId: number) => request<RunLog[]>({ url: `/task-runs/${runId}/logs` }),
 
