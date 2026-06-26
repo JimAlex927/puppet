@@ -427,7 +427,8 @@ func prepareSSHKey(workspace string, privateKey string) (authContext, error) {
 	if !strings.HasSuffix(privateKey, "\n") {
 		privateKey += "\n"
 	}
-	dir, err := os.MkdirTemp(workspace, ".git-ssh-*")
+	// Use OS temp dir (not workspace) — SSH on Windows cannot handle non-ASCII paths.
+	dir, err := os.MkdirTemp("", "puppet-git-ssh-*")
 	if err != nil {
 		return authContext{}, err
 	}
