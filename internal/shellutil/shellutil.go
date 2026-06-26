@@ -117,10 +117,12 @@ func psCommand(ctx context.Context, bin string, bypassPolicy bool, script string
 
 	// UTF-8 BOM tells PowerShell 5.1 to read the file as UTF-8 instead of
 	// system ANSI (GBK on Chinese Windows), preventing mojibake in non-ASCII paths.
+	// Set-PSDebug -Trace 1 prints each statement before execution for visibility.
 	const bom = "\xEF\xBB\xBF"
 	content := bom +
 		"[Console]::OutputEncoding = [Text.Encoding]::UTF8\n" +
 		"$OutputEncoding = [Text.Encoding]::UTF8\n" +
+		"Set-PSDebug -Trace 1\n" +
 		script
 	if _, err := tmp.WriteString(content); err != nil {
 		tmp.Close()
@@ -149,7 +151,8 @@ func cmdCommand(ctx context.Context, bin string, script string, extension string
 
 	// cmd.exe reads .cmd/.bat files using the system ANSI code page (GBK on
 	// Chinese Windows) regardless of chcp, so encode the file as GBK.
-	utf8Content := "@echo off\r\n@chcp 65001 >nul\r\n" +
+	// @chcp is silent (@ prefix); echo stays ON so each user command is printed.
+	utf8Content := "@chcp 65001 >nul\r\n" +
 		strings.ReplaceAll(script, "\n", "\r\n") + "\r\n"
 	gbkBytes, err := simplifiedchinese.GBK.NewEncoder().Bytes([]byte(utf8Content))
 	if err != nil {
