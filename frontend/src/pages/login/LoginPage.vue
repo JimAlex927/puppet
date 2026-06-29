@@ -193,7 +193,7 @@ async function submit() {
   inset: 0;
   background:
     radial-gradient(ellipse 60% 70% at 38% 55%, rgba(45,212,191,0.05) 0%, transparent 65%),
-    linear-gradient(135deg, rgba(5,10,25,0.84) 0%, rgba(8,16,38,0.80) 50%, rgba(5,10,22,0.88) 100%);
+    linear-gradient(135deg, rgba(5,10,25,0.62) 0%, rgba(8,16,38,0.58) 50%, rgba(5,10,22,0.68) 100%);
 }
 
 /* ── Left panel ─────────────────────────────────────────── */
@@ -496,6 +496,15 @@ async function submit() {
 }
 
 .lp-input::placeholder { color: #2e4560; }
+
+.lp-input:-webkit-autofill,
+.lp-input:-webkit-autofill:hover,
+.lp-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px rgba(6, 14, 36, 0.95) inset !important;
+  -webkit-text-fill-color: #c8daf0 !important;
+  caret-color: #c8daf0;
+  transition: background-color 9999s ease-in-out 0s;
+}
 
 .lp-eye {
   background: none;
