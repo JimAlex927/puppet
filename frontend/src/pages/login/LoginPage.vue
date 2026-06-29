@@ -1,7 +1,7 @@
 <template>
   <div class="lp">
     <!-- Atmospheric background -->
-    <div class="lp-bg" :style="{ backgroundImage: `url(${bgSrc})` }" />
+    <div class="lp-bg" />
 
     <!-- Left: brand + pipeline steps -->
     <div class="lp-left">
@@ -135,8 +135,6 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api'
-import bgSrc from '@/images/1.png'
-
 const router = useRouter()
 const loading = ref(false)
 const showPwd = ref(false)
@@ -183,6 +181,7 @@ async function submit() {
 .lp-bg {
   position: absolute;
   inset: 0;
+  background-image: url('/bg.png');
   background-size: cover;
   background-position: center top;
   z-index: 0;
@@ -193,8 +192,8 @@ async function submit() {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 60% 70% at 38% 55%, rgba(45,212,191,0.04) 0%, transparent 65%),
-    linear-gradient(135deg, rgba(5,10,25,0.92) 0%, rgba(8,16,38,0.88) 50%, rgba(5,10,22,0.94) 100%);
+    radial-gradient(ellipse 60% 70% at 38% 55%, rgba(45,212,191,0.05) 0%, transparent 65%),
+    linear-gradient(135deg, rgba(5,10,25,0.84) 0%, rgba(8,16,38,0.80) 50%, rgba(5,10,22,0.88) 100%);
 }
 
 /* ── Left panel ─────────────────────────────────────────── */
