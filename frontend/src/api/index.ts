@@ -1,4 +1,4 @@
-import { request } from './client'
+import { http, request } from './client'
 import type {
   Agent,
   AgentCreateResponse,
@@ -13,6 +13,7 @@ import type {
   Project,
   RunLog,
   RunConfig,
+  SharedFile,
   Task,
   TaskRun,
   User,
@@ -28,6 +29,14 @@ export const api = {
 
   dashboard: () => request<DashboardSummary>({ url: '/dashboard/summary' }),
 
+  sharedFiles: () => request<SharedFile[]>({ url: '/shared-files' }),
+  deleteSharedFile: (id: number) => request<{ deleted: boolean }>({ url: `/shared-files/${id}`, method: 'DELETE' }),
+  sharedFileDownloadUrl: (id: number) => {
+    const token = localStorage.getItem('puppet_token')
+    const query = token ? `?token=${encodeURIComponent(token)}` : ''
+    return `/api/shared-files/${id}/download${query}`
+  },
+
   projects: () => request<Project[]>({ url: '/projects' }),
   project: (id: number) => request<Project>({ url: `/projects/${id}` }),
   createProject: (data: Pick<Project, 'name' | 'description'>) =>
@@ -35,6 +44,15 @@ export const api = {
   updateProject: (id: number, data: Pick<Project, 'name' | 'description'>) =>
     request<Project>({ url: `/projects/${id}`, method: 'PUT', data }),
   deleteProject: (id: number) => request<{ deleted: boolean }>({ url: `/projects/${id}`, method: 'DELETE' }),
+  exportProject: async (id: number) => {
+    const response = await http.request<Blob>({ url: `/projects/${id}/export`, responseType: 'blob' })
+    return response.data
+  },
+  importProject: (file: File) => {
+    const data = new FormData()
+    data.append('file', file)
+    return request<Project>({ url: '/projects/import', method: 'POST', data })
+  },
 
   tasks: (projectId: number) => request<Task[]>({ url: `/projects/${projectId}/tasks` }),
   task: (id: number) => request<Task>({ url: `/tasks/${id}` }),

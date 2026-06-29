@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 
 	embeddedFrontend "puppet/frontend"
 	"puppet/internal/api"
+	"puppet/internal/cleanup"
 	"puppet/internal/config"
 	"puppet/internal/confignode"
 	"puppet/internal/confignodes/gitbranches"
@@ -44,7 +46,10 @@ func main() {
 	hub := logstream.NewHub()
 	runner := engine.New(database, registry, hub, cfg)
 
-	router := api.NewRouter(database, registry, configRegistry, runner, hub)
+	cleaner := cleanup.New(database, cfg.WorkspaceDir, cfg.RetainRunsPerTask)
+	cleaner.Start(context.Background())
+
+	router := api.NewRouter(database, registry, configRegistry, runner, hub, cfg)
 	go func() {
 		log.Printf("puppet api listening on %s", cfg.HTTPAddr)
 		if err := router.Run(cfg.HTTPAddr); err != nil {

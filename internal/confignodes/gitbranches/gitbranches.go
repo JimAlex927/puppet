@@ -146,6 +146,11 @@ func prepareSSHKey(privateKey string) (authContext, error) {
 	if privateKey == "" {
 		return authContext{}, fmt.Errorf("credential is missing privateKey")
 	}
+	privateKey = strings.ReplaceAll(privateKey, "\r\n", "\n")
+	privateKey = strings.ReplaceAll(privateKey, "\r", "\n")
+	if !strings.HasSuffix(privateKey, "\n") {
+		privateKey += "\n"
+	}
 	dir, err := os.MkdirTemp("", "puppet-config-git-ssh-*")
 	if err != nil {
 		return authContext{}, err
@@ -155,7 +160,10 @@ func prepareSSHKey(privateKey string) (authContext, error) {
 		_ = os.RemoveAll(dir)
 		return authContext{}, err
 	}
-	return authContext{env: []string{"GIT_TERMINAL_PROMPT=0", fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %q -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new", keyFile)}, secrets: []string{privateKey, keyFile}, cleanup: func() { _ = os.RemoveAll(dir) }}, nil
+	absKeyFile, _ := filepath.Abs(keyFile)
+	sshKeyPath := strings.ReplaceAll(absKeyFile, `\`, `/`)
+	sshCmd := fmt.Sprintf(`GIT_SSH_COMMAND=ssh -i "%s" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new`, sshKeyPath)
+	return authContext{env: []string{"GIT_TERMINAL_PROMPT=0", sshCmd}, secrets: []string{privateKey, keyFile}, cleanup: func() { _ = os.RemoveAll(dir) }}, nil
 }
 
 func parseBranches(content string, pattern string) []string {

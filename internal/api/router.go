@@ -2,16 +2,21 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"puppet/internal/agent"
 	"puppet/internal/auth"
+	"puppet/internal/config"
 	"puppet/internal/confignode"
 	"puppet/internal/credential"
 	"puppet/internal/engine"
@@ -19,6 +24,7 @@ import (
 	"puppet/internal/model"
 	"puppet/internal/node"
 	"puppet/internal/project"
+	"puppet/internal/sharedfiles"
 	"puppet/internal/task"
 
 	"github.com/gin-gonic/gin"
@@ -36,6 +42,7 @@ type Handler struct {
 	agents         *agent.Service
 	creds          *credential.Service
 	auths          *auth.Service
+	sharedFiles    *sharedfiles.Service
 }
 
 type resolvedRunInput struct {
@@ -48,10 +55,18 @@ type resolvedRunInput struct {
 	Error    string   `json:"error,omitempty"`
 }
 
-func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.Registry, runner *engine.Engine, hub *logstream.Hub) *gin.Engine {
+func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.Registry, runner *engine.Engine, hub *logstream.Hub, cfg config.Config) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	r.Use(cors())
+
+	sharedFiles, err := sharedfiles.NewService(db, cfg.SharedFilesDir, "/api/shared-file-uploads/")
+	if err != nil {
+		panic(fmt.Sprintf("initialize shared files: %v", err))
+	}
+
+	agentSvc := agent.NewService(db)
+	agentSvc.StartHeartbeatWatcher(context.Background())
 
 	h := &Handler{
 		db:             db,
@@ -61,10 +76,23 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 		hub:            hub,
 		projects:       project.NewService(db),
 		tasks:          task.NewService(db),
-		agents:         agent.NewService(db),
+		agents:         agentSvc,
 		creds:          credential.NewService(db),
 		auths:          auth.NewService(db),
+		sharedFiles:    sharedFiles,
 	}
+
+	// Public webhook endpoint — no auth required, validated by per-task token.
+	r.POST("/webhook/:token", h.webhookTrigger)
+
+	r.GET("/health", func(c *gin.Context) {
+		var count int64
+		if err := db.Model(&model.Agent{}).Count(&count).Error; err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 
 	api := r.Group("/api")
 	{
@@ -80,17 +108,29 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 		{
 			protected.GET("/dashboard/summary", h.dashboardSummary)
 
+			protected.GET("/shared-files", h.listSharedFiles)
+			protected.DELETE("/shared-files/:id", h.deleteSharedFile)
+			protected.GET("/shared-files/:id/download", h.downloadSharedFile)
+			protected.Any("/shared-file-uploads", h.handleSharedFileUpload)
+			protected.Any("/shared-file-uploads/", h.handleSharedFileUpload)
+			protected.Any("/shared-file-uploads/:uploadID", h.handleSharedFileUpload)
+
 			protected.GET("/projects", h.listProjects)
 			protected.POST("/projects", h.createProject)
+			protected.POST("/projects/import", h.importProject)
 			protected.GET("/projects/:id", h.getProject)
 			protected.PUT("/projects/:id", h.updateProject)
 			protected.DELETE("/projects/:id", h.deleteProject)
+			protected.GET("/projects/:id/export", h.exportProject)
 
 			protected.GET("/projects/:id/tasks", h.listTasks)
 			protected.POST("/projects/:id/tasks", h.createTask)
 			protected.GET("/tasks/:id", h.getTask)
 			protected.PUT("/tasks/:id", h.updateTask)
 			protected.DELETE("/tasks/:id", h.deleteTask)
+
+			protected.POST("/tasks/:id/webhook-token", h.generateWebhookToken)
+			protected.DELETE("/tasks/:id/webhook-token", h.revokeWebhookToken)
 
 			protected.GET("/tasks/:id/pipeline", h.getPipeline)
 			protected.PUT("/tasks/:id/pipeline", h.updatePipeline)
@@ -131,8 +171,9 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 func cors() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Tus-Resumable, Upload-Length, Upload-Metadata, Upload-Offset, Upload-Defer-Length, Upload-Concat")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Expose-Headers", "Location, Tus-Resumable, Upload-Offset, Upload-Length")
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
 			return
@@ -262,6 +303,41 @@ func (h *Handler) dashboardSummary(c *gin.Context) {
 	})
 }
 
+func (h *Handler) listSharedFiles(c *gin.Context) {
+	files, err := h.sharedFiles.List()
+	respond(c, files, err)
+}
+
+func (h *Handler) downloadSharedFile(c *gin.Context) {
+	file, err := h.sharedFiles.Get(paramID(c, "id"))
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	if _, err := os.Stat(file.StoragePath); err != nil {
+		respond(c, nil, err)
+		return
+	}
+	c.Header("Content-Type", file.ContentType)
+	c.Header("Content-Disposition", "attachment; filename="+strconv.Quote(file.Name))
+	c.File(file.StoragePath)
+}
+
+func (h *Handler) deleteSharedFile(c *gin.Context) {
+	respond(c, gin.H{"deleted": true}, h.sharedFiles.Delete(paramID(c, "id")))
+}
+
+func (h *Handler) handleSharedFileUpload(c *gin.Context) {
+	username := ""
+	if current, exists := c.Get("user"); exists {
+		if user, ok := current.(model.User); ok {
+			username = user.Username
+		}
+	}
+	req := c.Request.WithContext(sharedfiles.WithUploadedBy(c.Request.Context(), username))
+	h.sharedFiles.ServeUpload(c.Writer, req)
+}
+
 func (h *Handler) listProjects(c *gin.Context) {
 	projects, err := h.projects.List()
 	respond(c, projects, err)
@@ -298,6 +374,44 @@ func (h *Handler) updateProject(c *gin.Context) {
 
 func (h *Handler) deleteProject(c *gin.Context) {
 	respond(c, gin.H{"deleted": true}, h.projects.Delete(paramID(c, "id")))
+}
+
+func (h *Handler) exportProject(c *gin.Context) {
+	content, filename, err := h.projects.ExportArchive(paramID(c, "id"))
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	c.Header("Content-Disposition", "attachment; filename="+strconv.Quote(filename))
+	c.Data(http.StatusOK, "application/zip", content)
+}
+
+func (h *Handler) importProject(c *gin.Context) {
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		fail(c, http.StatusBadRequest, errors.New("file is required"))
+		return
+	}
+	file, err := fileHeader.Open()
+	if err != nil {
+		fail(c, http.StatusBadRequest, err)
+		return
+	}
+	defer file.Close()
+
+	const maxArchiveSize = 25 * 1024 * 1024
+	content, err := io.ReadAll(io.LimitReader(file, maxArchiveSize+1))
+	if err != nil {
+		fail(c, http.StatusBadRequest, err)
+		return
+	}
+	if len(content) > maxArchiveSize {
+		fail(c, http.StatusBadRequest, errors.New("project archive is too large"))
+		return
+	}
+
+	project, err := h.projects.ImportArchive(content)
+	respond(c, project, err)
 }
 
 func (h *Handler) listTasks(c *gin.Context) {
@@ -398,6 +512,73 @@ func (h *Handler) getRunConfig(c *gin.Context) {
 		return
 	}
 	ok(c, gin.H{"inputs": resolved})
+}
+
+func (h *Handler) generateWebhookToken(c *gin.Context) {
+	var task model.Task
+	if err := h.db.First(&task, paramID(c, "id")).Error; err != nil {
+		respond(c, nil, err)
+		return
+	}
+	token, err := generateToken()
+	if err != nil {
+		fail(c, http.StatusInternalServerError, err)
+		return
+	}
+	task.WebhookToken = token
+	if err := h.db.Save(&task).Error; err != nil {
+		respond(c, nil, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"token": token})
+}
+
+func (h *Handler) revokeWebhookToken(c *gin.Context) {
+	var task model.Task
+	if err := h.db.First(&task, paramID(c, "id")).Error; err != nil {
+		respond(c, nil, err)
+		return
+	}
+	task.WebhookToken = ""
+	err := h.db.Save(&task).Error
+	respond(c, gin.H{"ok": true}, err)
+}
+
+func (h *Handler) webhookTrigger(c *gin.Context) {
+	token := c.Param("token")
+	if token == "" {
+		fail(c, http.StatusBadRequest, errors.New("missing token"))
+		return
+	}
+	var task model.Task
+	if err := h.db.Where("webhook_token = ?", token).First(&task).Error; err != nil {
+		fail(c, http.StatusUnauthorized, errors.New("invalid webhook token"))
+		return
+	}
+	var req struct {
+		Input map[string]any `json:"input"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	pipeline, err := h.tasks.Pipeline(task.ID)
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	input, err := h.normalizeRunInput(c.Request.Context(), pipeline, req.Input)
+	if err != nil {
+		fail(c, http.StatusBadRequest, err)
+		return
+	}
+	run, err := h.engine.StartTask(c.Request.Context(), task.ID, "webhook", "webhook", input)
+	respond(c, run, err)
+}
+
+func generateToken() (string, error) {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func (h *Handler) runTask(c *gin.Context) {

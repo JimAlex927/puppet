@@ -93,7 +93,7 @@ ${version}
 - stdout/stderr 日志文件
 - metadata 文件路径
 
-`workdir` 只表示进程启动时的工作目录，默认 `${workspace}`。metadata 和 stdout/stderr 日志默认写到当前 TaskRun 的 `${workspace}/processes/<name>.json` / `${workspace}/processes/*.log`。停止时推荐使用启动节点输出的 `${node.<nodeId>.metadataPath}`。节点会重新读取当前 PID 对应的进程，并校验进程名、可执行路径、启动时间，确认不是 PID 复用后才停止。
+`workdir` 只表示进程启动时的工作目录，默认 `${workspace}`。metadata 默认写到当前 TaskRun 的 `${workspace}/processes/<name>.json`；如果配置了 `metadataPath`，stdout/stderr 日志会写到最终 metadata 文件的同一目录。如果 Windows 下 `showWindow=true`，启动节点会额外打开一个日志控制台窗口追踪 stdout/stderr 文件，真正的进程仍按真实 PID 托管。停止时推荐使用启动节点输出的 `${node.<nodeId>.metadataPath}`。节点会重新读取当前 PID 对应的进程，并校验进程名、可执行路径、启动时间，确认不是 PID 复用后才停止。
 
 真实系统进程名由节点从 `executable` 推导并在启动后写入 metadata，不作为用户配置项暴露。
 

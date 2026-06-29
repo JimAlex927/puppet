@@ -188,6 +188,7 @@ Process 节点用于管理长期运行的本机进程，第一版支持 Windows 
 - `Process Stop`: 停止进程
 - `workdir`: 只表示进程启动时的工作目录，默认 `${workspace}`
 - 启动后会在当前 TaskRun 的 `${workspace}/processes` 下写入 metadata，例如 `data/workspaces/taskrun-1/processes/app.json`
+- `showWindow`: Windows 下打开日志控制台窗口；stdout/stderr 始终写入 metadata 同目录，窗口会追踪这些日志文件
 - 真实系统进程名由平台从 `executable` 推导并写入 metadata，不需要用户配置
 - NodeRun 输出包含 `pid`、`metadataPath`、`stdoutLog`、`stderrLog`
 - `Process Stop` 通过 `Stop By` 下拉框选择一种停止方式：`metadata` 或 `port`

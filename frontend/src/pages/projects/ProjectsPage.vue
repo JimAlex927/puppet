@@ -5,7 +5,11 @@
         <h2 style="margin: 0">项目</h2>
         <p class="muted">管理你的 pipeline 项目</p>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openCreate">新建项目</el-button>
+      <div class="project-actions">
+        <el-button :icon="Upload" :loading="importing" @click="openImport">导入项目</el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreate">新建项目</el-button>
+      </div>
+      <input ref="fileInput" class="hidden-file" type="file" accept=".zip,application/zip" @change="importFile" />
     </div>
 
     <div v-if="projects.length" class="project-grid">
@@ -26,6 +30,7 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item @click.stop="openEdit(project)">编辑</el-dropdown-item>
+                <el-dropdown-item :icon="Download" @click.stop="download(project)">导出 ZIP</el-dropdown-item>
                 <el-dropdown-item divided style="color: #ef4444" @click.stop="remove(project.id)">删除</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -62,7 +67,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { FolderOpened, MoreFilled, Plus } from '@element-plus/icons-vue'
+import { Download, FolderOpened, MoreFilled, Plus, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@/api'
 import type { Project } from '@/types'
@@ -71,6 +76,8 @@ import { fmtDate } from '@/utils/format'
 const projects = ref<Project[]>([])
 const dialogVisible = ref(false)
 const submitting = ref(false)
+const importing = ref(false)
+const fileInput = ref<HTMLInputElement>()
 const editId = ref<number | null>(null)
 
 const form = reactive({ name: '', description: '' })
@@ -120,10 +127,56 @@ async function remove(id: number) {
   await load()
 }
 
+function openImport() {
+  fileInput.value?.click()
+}
+
+async function importFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  importing.value = true
+  try {
+    const project = await api.importProject(file)
+    ElMessage.success(`已导入：${project.name}`)
+    await load()
+  } finally {
+    importing.value = false
+    input.value = ''
+  }
+}
+
+async function download(project: Project) {
+  const blob = await api.exportProject(project.id)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${safeFileName(project.name)}.zip`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+function safeFileName(name: string) {
+  const value = name.trim().replace(/[<>:"/\\|?*\x00-\x1F]+/g, '-').replace(/^[. ]+|[. ]+$/g, '')
+  return value || 'project'
+}
+
 onMounted(load)
 </script>
 
 <style scoped>
+.project-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.hidden-file {
+  display: none;
+}
+
 .project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

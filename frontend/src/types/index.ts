@@ -141,6 +141,17 @@ export interface CredentialInput {
   privateKey?: string
 }
 
+export interface SharedFile {
+  id: number
+  uploadId: string
+  name: string
+  size: number
+  contentType: string
+  uploadedBy: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface NodeField {
   name: string
   label: string

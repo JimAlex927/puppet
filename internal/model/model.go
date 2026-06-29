@@ -35,6 +35,7 @@ type Task struct {
 	PipelineJSON    string    `json:"pipelineJson" gorm:"type:text;not null"`
 	AllowConcurrent bool      `json:"allowConcurrent"`
 	TimeoutSeconds  int       `json:"timeoutSeconds"`
+	WebhookToken    string    `json:"webhookToken" gorm:"index"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
@@ -128,6 +129,18 @@ type Credential struct {
 	Description string    `json:"description"`
 	Username    string    `json:"username"`
 	SecretJSON  string    `json:"-" gorm:"type:text"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type SharedFile struct {
+	ID          uint      `json:"id" gorm:"primaryKey"`
+	UploadID    string    `json:"uploadId" gorm:"uniqueIndex;not null"`
+	Name        string    `json:"name" gorm:"not null"`
+	Size        int64     `json:"size"`
+	ContentType string    `json:"contentType"`
+	StoragePath string    `json:"-"`
+	UploadedBy  string    `json:"uploadedBy"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }

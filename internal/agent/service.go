@@ -1,10 +1,12 @@
 package agent
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"puppet/internal/model"
 	"puppet/internal/secret"
 	"time"
@@ -13,6 +15,8 @@ import (
 
 	"gorm.io/gorm"
 )
+
+const heartbeatTimeout = 2 * time.Minute
 
 type CreateRequest struct {
 	Name        string   `json:"name"`
@@ -120,6 +124,30 @@ func (s *Service) Heartbeat(agent model.Agent, osName string, arch string, hostn
 	agent.LastHeartbeatAt = &now
 	err := s.db.Save(&agent).Error
 	return agent, err
+}
+
+// StartHeartbeatWatcher marks agents offline when they miss heartbeats.
+func (s *Service) StartHeartbeatWatcher(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				cutoff := time.Now().Add(-heartbeatTimeout)
+				res := s.db.Model(&model.Agent{}).
+					Where("status = ? AND last_heartbeat_at < ?", "online", cutoff).
+					Update("status", "offline")
+				if res.Error != nil {
+					log.Printf("[agent] heartbeat watcher: %v", res.Error)
+				} else if res.RowsAffected > 0 {
+					log.Printf("[agent] marked %d agent(s) offline (heartbeat timeout)", res.RowsAffected)
+				}
+			}
+		}
+	}()
 }
 
 func randomToken() (string, error) {

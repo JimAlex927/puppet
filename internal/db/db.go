@@ -23,6 +23,9 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 	if err := os.MkdirAll(cfg.WorkspaceDir, 0o755); err != nil {
 		return nil, err
 	}
+	if err := os.MkdirAll(cfg.SharedFilesDir, 0o755); err != nil {
+		return nil, err
+	}
 
 	database, err := gorm.Open(sqlite.Open(cfg.DatabaseDSN), &gorm.Config{})
 	if err != nil {
@@ -38,6 +41,7 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 		&model.Credential{},
 		&model.User{},
 		&model.Session{},
+		&model.SharedFile{},
 	); err != nil {
 		return nil, err
 	}
