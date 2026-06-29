@@ -129,7 +129,7 @@ export function usePipelineEditor(taskId: number) {
   ): { pipelineNode: PipelineNode; vfNode: Node } {
     const params: Record<string, unknown> = {}
     for (const f of meta.fields) {
-      params[f.name] = f.default ?? (f.type === 'number' ? 0 : '')
+      params[f.name] = f.default ?? defaultFieldValue(f.type)
     }
     const node: PipelineNode = {
       id: `${meta.type}-${Date.now()}`,
@@ -216,6 +216,13 @@ export function usePipelineEditor(taskId: number) {
     savePipelineOnly,
     save,
   }
+}
+
+function defaultFieldValue(type: string) {
+  if (type === 'number') return 0
+  if (type === 'credential') return 0
+  if (type === 'switch') return false
+  return ''
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

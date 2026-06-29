@@ -222,8 +222,7 @@ function setSourceType(input: PipelineInput, type: string) {
   const meta = props.sourceTypes.find((t) => t.type === type)
   const params: Record<string, unknown> = {}
   for (const field of meta?.fields ?? []) {
-    params[field.name] =
-      field.default ?? (field.type === 'number' ? 0 : field.type === 'credential' ? 0 : '')
+    params[field.name] = field.default ?? defaultFieldValue(field.type)
   }
   input.source = { type, params } as InputSource
   input.optionsText = ''
@@ -240,6 +239,13 @@ function onTypeChange(input: PipelineInput) {
   if (input.type === 'file') {
     input.default = undefined
   }
+}
+
+function defaultFieldValue(type: string) {
+  if (type === 'number') return 0
+  if (type === 'credential') return 0
+  if (type === 'switch') return false
+  return ''
 }
 </script>
 

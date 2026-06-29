@@ -16,6 +16,7 @@ import (
 	"puppet/internal/agentproto"
 	"puppet/internal/model"
 	"puppet/internal/node"
+	archivenode "puppet/internal/nodes/archive"
 	"puppet/internal/nodes/git"
 	httpnode "puppet/internal/nodes/http"
 	processnode "puppet/internal/nodes/process"
@@ -55,6 +56,8 @@ func main() {
 	cfg.registry.Register(git.New())
 	cfg.registry.Register(processnode.NewStart())
 	cfg.registry.Register(processnode.NewStop())
+	cfg.registry.Register(archivenode.NewCompress())
+	cfg.registry.Register(archivenode.NewExtract())
 
 	go heartbeatLoop(cfg)
 

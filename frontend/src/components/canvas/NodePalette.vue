@@ -46,6 +46,7 @@
               class="palette-item"
               draggable="true"
               @dragstart="onDragStart($event, item)"
+              @click="emit('node-click', item)"
             >
               <div class="palette-item-icon" :style="{ background: categoryColor(item.category) + '22', color: categoryColor(item.category) }">
                 <el-icon :size="13"><component :is="categoryIcon(item.category)" /></el-icon>
@@ -64,14 +65,14 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { ArrowDown, Clock, Connection, Document, Monitor, Operation, Search } from '@element-plus/icons-vue'
+import { ArrowDown, Clock, Connection, Document, Files, Monitor, Operation, Search } from '@element-plus/icons-vue'
 import type { NodeMetadata } from '@/types'
 
 const props = defineProps<{ nodeTypes: NodeMetadata[] }>()
 const emit = defineEmits<{ 'node-click': [meta: NodeMetadata] }>()
 
 const query = ref('')
-const open = reactive(new Set<string>(['process', 'script']))
+const open = reactive(new Set<string>(['process', 'script', 'file']))
 
 const CAT_LABELS: Record<string, string> = {
   process: '进程',
@@ -79,6 +80,7 @@ const CAT_LABELS: Record<string, string> = {
   http:    'HTTP',
   sleep:   '延迟',
   git:     'Git',
+  file:    '文件',
 }
 
 const CATEGORY_COLOR: Record<string, string> = {
@@ -87,6 +89,7 @@ const CATEGORY_COLOR: Record<string, string> = {
   http:    '#6366f1',
   sleep:   '#94a3b8',
   git:     '#f97316',
+  file:    '#22c55e',
   default: '#64748b',
 }
 
@@ -95,6 +98,7 @@ const CATEGORY_ICON: Record<string, unknown> = {
   script:  Document,
   http:    Connection,
   sleep:   Clock,
+  file:    Files,
   default: Operation,
 }
 

@@ -63,7 +63,7 @@ export function usePipeline(taskId: number) {
     if (!pipeline.value) return
     const params: Record<string, unknown> = {}
     for (const field of meta.fields) {
-      params[field.name] = field.default ?? (field.type === 'number' ? 0 : '')
+      params[field.name] = field.default ?? defaultFieldValue(field.type)
     }
     const node: PipelineNode = {
       id: `${meta.type}-${Date.now()}`,
@@ -166,6 +166,13 @@ export function usePipeline(taskId: number) {
     addInput,
     save,
   }
+}
+
+function defaultFieldValue(type: string) {
+  if (type === 'number') return 0
+  if (type === 'credential') return 0
+  if (type === 'switch') return false
+  return ''
 }
 
 // ── helpers (module-level, not exported) ────────────────────────────────────

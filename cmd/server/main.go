@@ -16,6 +16,7 @@ import (
 	"puppet/internal/engine"
 	"puppet/internal/logstream"
 	"puppet/internal/node"
+	archivenode "puppet/internal/nodes/archive"
 	"puppet/internal/nodes/git"
 	httpnode "puppet/internal/nodes/http"
 	processnode "puppet/internal/nodes/process"
@@ -39,6 +40,8 @@ func main() {
 	registry.Register(git.New())
 	registry.Register(processnode.NewStart())
 	registry.Register(processnode.NewStop())
+	registry.Register(archivenode.NewCompress())
+	registry.Register(archivenode.NewExtract())
 	configRegistry := confignode.NewRegistry()
 	configRegistry.Register(gitbranches.New())
 	configRegistry.Register(script.New())

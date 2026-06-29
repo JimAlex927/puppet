@@ -323,7 +323,7 @@ function onSourceTypeChange(type: string) {
   const meta = sourceTypes.value.find(t => t.type === type)
   const params: Record<string, unknown> = {}
   for (const field of meta?.fields ?? []) {
-    params[field.name] = field.default ?? (field.type === 'number' ? 0 : field.type === 'credential' ? 0 : '')
+    params[field.name] = field.default ?? defaultFieldValue(field.type)
   }
   inputForm.sourceParams = params
 }
@@ -367,6 +367,13 @@ async function saveInput() {
 
 function removeInput(idx: number) {
   pipeline.value!.inputs.splice(idx, 1)
+}
+
+function defaultFieldValue(type: string) {
+  if (type === 'number') return 0
+  if (type === 'credential') return 0
+  if (type === 'switch') return false
+  return ''
 }
 
 // Init canvas once pipeline + canvas are both ready

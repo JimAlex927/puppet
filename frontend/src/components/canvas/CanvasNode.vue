@@ -53,7 +53,7 @@ import { computed } from 'vue'
 import { Handle, Position, type NodeProps } from '@vue-flow/core'
 import {
   Clock, CloseBold, Connection, Document, Loading,
-  Monitor, Operation, Select, Timer,
+  Files, Monitor, Operation, Select, Timer,
 } from '@element-plus/icons-vue'
 import type { PipelineNode, Status } from '@/types'
 import { fmtDuration } from '@/utils/format'
@@ -100,6 +100,7 @@ const CATEGORY: Record<string, { color: string; icon: unknown }> = {
   script:  { color: '#f59e0b', icon: Document },
   http:    { color: '#6366f1', icon: Connection },
   sleep:   { color: '#94a3b8', icon: Clock },
+  file:    { color: '#22c55e', icon: Files },
   default: { color: '#64748b', icon: Operation },
 }
 
