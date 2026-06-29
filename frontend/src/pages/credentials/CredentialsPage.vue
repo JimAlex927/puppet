@@ -67,7 +67,17 @@
           <el-input v-model="form.token" type="password" show-password autocomplete="new-password" />
         </el-form-item>
         <el-form-item v-if="form.type === 'ssh_key'" label="Private Key">
-          <el-input v-model="form.privateKey" type="textarea" :rows="8" />
+          <el-input
+            v-model="form.privateKey"
+            type="textarea"
+            :rows="8"
+            placeholder="-----BEGIN RSA PRIVATE KEY-----
+...
+-----END RSA PRIVATE KEY-----
+请粘贴完整的私钥，包括 BEGIN / END 行"
+            style="font-family: monospace; font-size: 12px"
+          />
+          <div v-if="sshKeyWarning" class="cred-key-warning">{{ sshKeyWarning }}</div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -79,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { Delete, Edit, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@/api'
@@ -131,8 +141,23 @@ function openEdit(credential: Credential) {
   dialogVisible.value = true
 }
 
+const sshKeyWarning = computed(() => {
+  if (form.type !== 'ssh_key' || !(form.privateKey ?? '').trim()) return ''
+  const key = (form.privateKey ?? '').trim()
+  if (!key.startsWith('-----BEGIN') || !key.includes('-----END')) {
+    return '⚠ 私钥格式不完整，请粘贴包含 -----BEGIN ... KEY----- 和 -----END ... KEY----- 的完整内容'
+  }
+  return ''
+})
+
 async function save() {
   if (!form.name.trim()) return ElMessage.warning('请输入凭据名称')
+  if (form.type === 'ssh_key' && (form.privateKey ?? '').trim()) {
+    const key = (form.privateKey ?? '').trim()
+    if (!key.startsWith('-----BEGIN') || !key.includes('-----END')) {
+      return ElMessage.error('私钥格式不完整，请粘贴包含 BEGIN / END 行的完整 PEM 私钥')
+    }
+  }
   const payload: CredentialInput = {
     name: form.name,
     type: form.type,
@@ -164,3 +189,12 @@ function typeLabel(type: Credential['type']) {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.cred-key-warning {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #f59e0b;
+  line-height: 1.5;
+}
+</style>
