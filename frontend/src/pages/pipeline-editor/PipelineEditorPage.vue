@@ -44,6 +44,7 @@
         :node="selectedNode"
         :metadata="selectedMetadata"
         :credentials="credentials"
+        :on-save-pipeline="savePipelineOnly"
         @close="selectedNodeId = null"
       />
     </div>

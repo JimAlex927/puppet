@@ -114,22 +114,35 @@
           </div>
         </div>
       </div>
+
+      <!-- Footer save -->
+      <div class="ncf-footer">
+        <button class="ncf-save-btn" :disabled="saving" @click="onSave">
+          <el-icon v-if="saving" class="is-loading" :size="13"><Loading /></el-icon>
+          <el-icon v-else :size="13"><Check /></el-icon>
+          {{ saving ? '保存中…' : '保存节点' }}
+        </button>
+      </div>
     </div>
   </transition>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Close } from '@element-plus/icons-vue'
+import { computed, ref } from 'vue'
+import { Check, Close, Loading } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import type { Credential, NodeField, NodeMetadata, PipelineNode } from '@/types'
 
 const props = defineProps<{
   node?: PipelineNode
   metadata?: NodeMetadata
   credentials: Credential[]
+  onSavePipeline?: () => Promise<void>
 }>()
 
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; save: [] }>()
+
+const saving = ref(false)
 
 const visibleFields = computed<NodeField[]>(() => {
   if (!props.metadata || !props.node) return []
@@ -138,6 +151,21 @@ const visibleFields = computed<NodeField[]>(() => {
     return props.node!.params[f.showWhen.field] === f.showWhen.equals
   })
 })
+
+async function onSave() {
+  saving.value = true
+  try {
+    if (props.onSavePipeline) {
+      await props.onSavePipeline()
+    }
+    emit('save')
+    ElMessage.success('节点已保存')
+  } catch (e: any) {
+    ElMessage.error(e?.message ?? '保存失败')
+  } finally {
+    saving.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -284,6 +312,32 @@ const visibleFields = computed<NodeField[]>(() => {
 
 .ncf-mono--teal { color: #2dd4bf; }
 .ncf-mono--red  { color: #f87171; }
+
+.ncf-footer {
+  padding: 10px 14px;
+  border-top: 1px solid #2d2e3d;
+  flex-shrink: 0;
+}
+
+.ncf-save-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 0;
+  background: #2dd4bf;
+  color: #0f172a;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.ncf-save-btn:hover:not(:disabled) { background: #5eead4; }
+.ncf-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Transition */
 .drawer-slide-enter-active,
