@@ -9,11 +9,14 @@ import type {
   LoginResponse,
   NodeMetadata,
   NodeRun,
+  PageResult,
   PipelineDefinition,
   Project,
+  PublicStatus,
   RunLog,
   RunConfig,
   SharedFile,
+  SharedFileShare,
   Task,
   TaskRun,
   User,
@@ -22,6 +25,8 @@ import type {
 
 
 export const api = {
+  publicStatus: () => request<PublicStatus>({ url: '/public/status' }),
+
   login: (data: { username: string; password: string }) =>
     request<LoginResponse>({ url: '/auth/login', method: 'POST', data }),
   logout: () => request<{ loggedOut: boolean }>({ url: '/auth/logout', method: 'POST' }),
@@ -30,6 +35,12 @@ export const api = {
   dashboard: () => request<DashboardSummary>({ url: '/dashboard/summary' }),
 
   sharedFiles: () => request<SharedFile[]>({ url: '/shared-files' }),
+  createSharedFileShare: (id: number, expiresInMinutes: number) =>
+    request<SharedFileShare>({
+      url: `/shared-files/${id}/share`,
+      method: 'POST',
+      data: { expiresInMinutes },
+    }),
   deleteSharedFile: (id: number) => request<{ deleted: boolean }>({ url: `/shared-files/${id}`, method: 'DELETE' }),
   sharedFileDownloadUrl: (id: number) => {
     const token = localStorage.getItem('puppet_token')
@@ -38,6 +49,8 @@ export const api = {
   },
 
   projects: () => request<Project[]>({ url: '/projects' }),
+  projectsPage: (page: number, pageSize: number) =>
+    request<PageResult<Project>>({ url: '/projects', params: { page, pageSize } }),
   project: (id: number) => request<Project>({ url: `/projects/${id}` }),
   createProject: (data: Pick<Project, 'name' | 'description'>) =>
     request<Project>({ url: '/projects', method: 'POST', data }),
@@ -55,6 +68,8 @@ export const api = {
   },
 
   tasks: (projectId: number) => request<Task[]>({ url: `/projects/${projectId}/tasks` }),
+  tasksPage: (projectId: number, page: number, pageSize: number) =>
+    request<PageResult<Task>>({ url: `/projects/${projectId}/tasks`, params: { page, pageSize } }),
   task: (id: number) => request<Task>({ url: `/tasks/${id}` }),
   createTask: (projectId: number, data: Partial<Task>) =>
     request<Task>({ url: `/projects/${projectId}/tasks`, method: 'POST', data }),
@@ -70,6 +85,9 @@ export const api = {
 
   runTask: (taskId: number, input: Record<string, unknown> = {}) =>
     request<TaskRun>({ url: `/tasks/${taskId}/run`, method: 'POST', data: { input } }),
+  prepareTaskRun: (taskId: number, input: Record<string, unknown> = {}) =>
+    request<TaskRun>({ url: `/tasks/${taskId}/runs/prepare`, method: 'POST', data: { input } }),
+  startTaskRun: (runId: number) => request<TaskRun>({ url: `/task-runs/${runId}/start`, method: 'POST' }),
   taskRuns: (taskId: number) => request<TaskRun[]>({ url: `/tasks/${taskId}/runs` }),
   taskRun: (id: number) => request<TaskRun>({ url: `/task-runs/${id}` }),
   cancelTaskRun: (id: number) => request<TaskRun>({ url: `/task-runs/${id}/cancel`, method: 'POST' }),

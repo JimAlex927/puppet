@@ -30,10 +30,20 @@ import (
 // shell to use; pass "" or "auto" for automatic selection. Callers must call
 // cleanup() after the command finishes to remove any temp files.
 func BuildCommand(ctx context.Context, script, shell string) (cmd *exec.Cmd, cleanup func(), err error) {
+	return buildCommand(ctx, script, shell, false)
+}
+
+// BuildSilentCommand is for callers that parse stdout as data. It disables
+// command tracing/echo so stdout contains only the script's explicit output.
+func BuildSilentCommand(ctx context.Context, script, shell string) (cmd *exec.Cmd, cleanup func(), err error) {
+	return buildCommand(ctx, script, shell, true)
+}
+
+func buildCommand(ctx context.Context, script, shell string, silent bool) (cmd *exec.Cmd, cleanup func(), err error) {
 	if shell == "" || shell == "auto" {
-		return buildAuto(ctx, script)
+		return buildAuto(ctx, script, silent)
 	}
-	return buildExplicit(ctx, script, shell)
+	return buildExplicit(ctx, script, shell, silent)
 }
 
 // ShellName returns the name of the shell that BuildCommand("auto") would pick.
@@ -49,33 +59,33 @@ func ShellName() string {
 	return "unknown"
 }
 
-func buildAuto(ctx context.Context, script string) (*exec.Cmd, func(), error) {
+func buildAuto(ctx context.Context, script string, silent bool) (*exec.Cmd, func(), error) {
 	if runtime.GOOS != "windows" {
-		return buildExplicit(ctx, script, "sh")
+		return buildExplicit(ctx, script, "sh", silent)
 	}
 	for _, name := range []string{"pwsh", "powershell", "cmd"} {
 		if _, err := exec.LookPath(name); err == nil {
-			return buildExplicit(ctx, script, name)
+			return buildExplicit(ctx, script, name, silent)
 		}
 	}
 	return nil, func() {}, fmt.Errorf("no usable shell found on PATH (tried pwsh, powershell, cmd)")
 }
 
-func buildExplicit(ctx context.Context, script, shell string) (*exec.Cmd, func(), error) {
+func buildExplicit(ctx context.Context, script, shell string, silent bool) (*exec.Cmd, func(), error) {
 	switch shell {
 	case "pwsh":
 		bin, err := exec.LookPath("pwsh")
 		if err != nil {
 			return nil, func() {}, fmt.Errorf("pwsh not found in PATH")
 		}
-		return psCommand(ctx, bin, false, script)
+		return psCommand(ctx, bin, false, script, silent)
 
 	case "powershell":
 		bin, err := exec.LookPath("powershell")
 		if err != nil {
 			return nil, func() {}, fmt.Errorf("powershell not found in PATH")
 		}
-		return psCommand(ctx, bin, true, script)
+		return psCommand(ctx, bin, true, script, silent)
 
 	case "cmd", "bat":
 		bin, err := exec.LookPath("cmd")
@@ -86,7 +96,7 @@ func buildExplicit(ctx context.Context, script, shell string) (*exec.Cmd, func()
 		if shell == "bat" {
 			extension = ".bat"
 		}
-		return cmdCommand(ctx, bin, script, extension)
+		return cmdCommand(ctx, bin, script, extension, silent)
 
 	case "sh", "bash", "zsh", "fish":
 		bin, err := exec.LookPath(shell)
@@ -107,7 +117,7 @@ func buildExplicit(ctx context.Context, script, shell string) (*exec.Cmd, func()
 
 // psCommand runs the script via PowerShell using a temp .ps1 file.
 // bypassPolicy adds -ExecutionPolicy Bypass (needed for Windows PowerShell 5.1).
-func psCommand(ctx context.Context, bin string, bypassPolicy bool, script string) (*exec.Cmd, func(), error) {
+func psCommand(ctx context.Context, bin string, bypassPolicy bool, script string, silent bool) (*exec.Cmd, func(), error) {
 	tmp, err := os.CreateTemp("", "puppet-shell-*.ps1")
 	if err != nil {
 		return nil, func() {}, err
@@ -117,13 +127,15 @@ func psCommand(ctx context.Context, bin string, bypassPolicy bool, script string
 
 	// UTF-8 BOM tells PowerShell 5.1 to read the file as UTF-8 instead of
 	// system ANSI (GBK on Chinese Windows), preventing mojibake in non-ASCII paths.
-	// Set-PSDebug -Trace 1 prints each statement before execution for visibility.
 	const bom = "\xEF\xBB\xBF"
 	content := bom +
 		"[Console]::OutputEncoding = [Text.Encoding]::UTF8\n" +
-		"$OutputEncoding = [Text.Encoding]::UTF8\n" +
-		"Set-PSDebug -Trace 1\n" +
-		script
+		"$OutputEncoding = [Text.Encoding]::UTF8\n"
+	if !silent {
+		// Set-PSDebug -Trace 1 prints each statement before execution for visibility.
+		content += "Set-PSDebug -Trace 1\n"
+	}
+	content += script
 	if _, err := tmp.WriteString(content); err != nil {
 		tmp.Close()
 		clean()
@@ -141,7 +153,7 @@ func psCommand(ctx context.Context, bin string, bypassPolicy bool, script string
 
 // cmdCommand runs the script via cmd.exe using a temp .cmd/.bat file.
 // @chcp 65001 switches the session to UTF-8 before the user script runs.
-func cmdCommand(ctx context.Context, bin string, script string, extension string) (*exec.Cmd, func(), error) {
+func cmdCommand(ctx context.Context, bin string, script string, extension string, silent bool) (*exec.Cmd, func(), error) {
 	tmp, err := os.CreateTemp("", "puppet-shell-*"+extension)
 	if err != nil {
 		return nil, func() {}, err
@@ -151,9 +163,13 @@ func cmdCommand(ctx context.Context, bin string, script string, extension string
 
 	// cmd.exe reads .cmd/.bat files using the system ANSI code page (GBK on
 	// Chinese Windows) regardless of chcp, so encode the file as GBK.
-	// @chcp is silent (@ prefix); echo stays ON so each user command is printed.
-	utf8Content := "@chcp 65001 >nul\r\n" +
-		strings.ReplaceAll(script, "\n", "\r\n") + "\r\n"
+	// @chcp is silent (@ prefix). Keep echo on for Shell node visibility, but
+	// turn it off for stdout-parsing callers such as dynamic select inputs.
+	prefix := "@chcp 65001 >nul\r\n"
+	if silent {
+		prefix += "@echo off\r\n"
+	}
+	utf8Content := prefix + strings.ReplaceAll(script, "\n", "\r\n") + "\r\n"
 	gbkBytes, err := simplifiedchinese.GBK.NewEncoder().Bytes([]byte(utf8Content))
 	if err != nil {
 		// Fall back to UTF-8 if encoding fails (non-Chinese content).

@@ -16,6 +16,6 @@ func TestNewRouterRegistersProjectArchiveRoutes(t *testing.T) {
 		}
 	}()
 
-	cfg := config.Config{SharedFilesDir: t.TempDir()}
+	cfg := config.Config{SharedFilesDir: t.TempDir(), WorkspaceDir: t.TempDir()}
 	NewRouter(nil, node.NewRegistry(), confignode.NewRegistry(), nil, logstream.NewHub(), cfg)
 }

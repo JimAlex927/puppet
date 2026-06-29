@@ -56,6 +56,14 @@ func New(db *gorm.DB, registry *node.Registry, hub *logstream.Hub, cfg config.Co
 }
 
 func (e *Engine) StartTask(ctx context.Context, taskID uint, triggerType string, triggeredBy string, input map[string]any) (model.TaskRun, error) {
+	run, err := e.PrepareTaskRun(ctx, taskID, triggerType, triggeredBy, input)
+	if err != nil {
+		return model.TaskRun{}, err
+	}
+	return e.StartPreparedTaskRun(ctx, run.ID)
+}
+
+func (e *Engine) PrepareTaskRun(ctx context.Context, taskID uint, triggerType string, triggeredBy string, input map[string]any) (model.TaskRun, error) {
 	var task model.Task
 	var run model.TaskRun
 	var pipeline node.PipelineDefinition
@@ -91,6 +99,31 @@ func (e *Engine) StartTask(ctx context.Context, taskID uint, triggerType string,
 		return tx.Create(&run).Error
 	})
 	if err != nil {
+		return model.TaskRun{}, err
+	}
+
+	workspace := filepath.Join(e.cfg.WorkspaceDir, fmt.Sprintf("taskrun-%d", run.ID))
+	if err := os.MkdirAll(filepath.Join(workspace, "uploaded_files"), 0o755); err != nil {
+		return model.TaskRun{}, err
+	}
+	return run, nil
+}
+
+func (e *Engine) StartPreparedTaskRun(ctx context.Context, taskRunID uint) (model.TaskRun, error) {
+	var run model.TaskRun
+	if err := e.db.First(&run, taskRunID).Error; err != nil {
+		return model.TaskRun{}, err
+	}
+	if run.Status != model.TaskRunPending {
+		return model.TaskRun{}, fmt.Errorf("task run #%d is %s, only pending task runs can be started", run.ID, run.Status)
+	}
+
+	var task model.Task
+	if err := e.db.First(&task, run.TaskID).Error; err != nil {
+		return model.TaskRun{}, err
+	}
+	var pipeline node.PipelineDefinition
+	if err := json.Unmarshal([]byte(run.PipelineSnapshotJSON), &pipeline); err != nil {
 		return model.TaskRun{}, err
 	}
 

@@ -144,3 +144,12 @@ type SharedFile struct {
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
+
+type SharedFileShare struct {
+	ID           uint       `json:"id" gorm:"primaryKey"`
+	SharedFileID uint       `json:"sharedFileId" gorm:"index;not null"`
+	Token        string     `json:"token" gorm:"uniqueIndex;not null"`
+	ExpiresAt    *time.Time `json:"expiresAt"`
+	CreatedBy    string     `json:"createdBy"`
+	CreatedAt    time.Time  `json:"createdAt"`
+}

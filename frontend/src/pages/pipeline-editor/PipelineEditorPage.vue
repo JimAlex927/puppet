@@ -149,11 +149,15 @@
             <el-option label="下拉选择 (select)" value="select" />
             <el-option label="数字 (number)" value="number" />
             <el-option label="开关 (boolean)" value="boolean" />
+            <el-option label="文件 (file)" value="file" />
           </el-select>
         </el-form-item>
-        <el-form-item label="默认值">
+        <el-form-item v-if="inputForm.type !== 'file'" label="默认值">
           <el-input v-if="inputForm.type !== 'boolean'" v-model="inputForm.defaultText" placeholder="可选" />
           <el-switch v-else v-model="inputForm.defaultBool" />
+        </el-form-item>
+        <el-form-item v-if="inputForm.type === 'file'" label="文件数量">
+          <el-switch v-model="inputForm.multipleFiles" active-text="允许多个文件" inactive-text="单个文件" />
         </el-form-item>
         <template v-if="inputForm.type === 'select'">
           <el-form-item label="数据来源">
@@ -273,6 +277,7 @@ const inputForm = reactive({
   required: false,
   defaultText: '',
   defaultBool: false,
+  multipleFiles: false,
   optionsText: '',
   sourceType: 'static',
   sourceParams: {} as Record<string, unknown>,
@@ -286,7 +291,7 @@ function resetInputForm() {
   editingInputIdx.value = null
   Object.assign(inputForm, {
     name: '', label: '', type: 'string', required: false,
-    defaultText: '', defaultBool: false, optionsText: '',
+    defaultText: '', defaultBool: false, multipleFiles: false, optionsText: '',
     sourceType: 'static', sourceParams: {},
   })
 }
@@ -304,6 +309,7 @@ function openEditInput(idx: number) {
   inputForm.type = inp.type
   inputForm.required = inp.required
   inputForm.defaultBool = inp.type === 'boolean' ? Boolean(inp.default) : false
+  inputForm.multipleFiles = inp.type === 'file' ? Boolean(inp.multiple) : false
   inputForm.defaultText = inp.type !== 'boolean' && inp.default != null ? String(inp.default) : ''
   inputForm.sourceType = inp.source?.type ?? 'static'
   inputForm.sourceParams = inp.source ? { ...inp.source.params } : {}
@@ -331,13 +337,18 @@ async function saveInput() {
     label: inputForm.label.trim() || inputForm.name.trim(),
     type: inputForm.type,
     required: inputForm.required,
-    default: inputForm.type === 'boolean' ? inputForm.defaultBool : (inputForm.defaultText.trim() || undefined),
+    default: inputForm.type === 'file'
+      ? undefined
+      : inputForm.type === 'boolean'
+        ? inputForm.defaultBool
+        : (inputForm.defaultText.trim() || undefined),
     options: (inputForm.type === 'select' && isStatic)
       ? inputForm.optionsText.split('\n').map(s => s.trim()).filter(Boolean)
       : undefined,
     source: (inputForm.type === 'select' && !isStatic)
       ? { type: inputForm.sourceType, params: { ...inputForm.sourceParams } }
       : undefined,
+    multiple: inputForm.type === 'file' ? inputForm.multipleFiles : undefined,
   }
 
   if (editingInputIdx.value === null) {

@@ -19,6 +19,7 @@ func NewHandler(dist fs.FS, apiTarget string) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.Handle("/api/", proxy)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		if r.URL.Path != "/" {
 			path := strings.TrimPrefix(r.URL.Path, "/")
 			if _, err := fs.Stat(dist, path); err != nil {

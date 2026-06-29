@@ -72,7 +72,7 @@ func (e *Executor) Execute(ctx confignode.Context, params map[string]any) (confi
 	defer cancel()
 
 	shell := stringFrom(params["shell"])
-	cmd, cleanup, err := shellutil.BuildCommand(execCtx, script, shell)
+	cmd, cleanup, err := shellutil.BuildSilentCommand(execCtx, script, shell)
 	if err != nil {
 		return confignode.Result{}, err
 	}

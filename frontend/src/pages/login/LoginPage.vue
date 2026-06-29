@@ -1,153 +1,171 @@
 <template>
-  <div class="lp">
-    <!-- Atmospheric background -->
-    <div class="lp-bg" />
+  <div class="auth-page">
+    <div class="auth-bg" />
 
-    <!-- Left: brand + pipeline steps -->
-    <div class="lp-left">
-      <div class="lp-left-inner">
-        <div class="lp-eyebrow">Pipeline Automation Platform</div>
-        <h1 class="lp-headline">
-          以<em class="lp-em">傀儡</em>之力<br>驱动自动化任务
-        </h1>
-        <p class="lp-tagline">灵偶执令，万事皆可自动化</p>
-
-        <div class="lp-steps">
-          <div class="lp-steps-track" />
-          <div
-            v-for="(s, i) in steps"
-            :key="s.name"
-            class="lp-step"
-            :style="`animation-delay:${0.5 + i * 0.22}s`"
-          >
-            <div class="lp-step-node">
-              <div class="lp-step-pulse" />
-              <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                <path d="M1 4l3 3 5-6" stroke="#0d1628" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <span class="lp-step-name">{{ s.name }}</span>
-          </div>
-        </div>
-
-        <blockquote class="lp-quote">
-          <span class="lp-quote-mark">"</span>
-          真正的自动化，是让灵偶替你执掌繁琐，<br>你专注于创造与成长。
-        </blockquote>
-      </div>
-
-      <div class="lp-statusbar">
-        <span class="lp-statusbar-dot" />
-        <span>所有流水线运行正常</span>
-        <span class="lp-statusbar-sep">·</span>
-        <span>最近成功：2 分钟前</span>
-        <span class="lp-statusbar-brand">
-          <svg width="14" height="14" viewBox="0 0 36 36" fill="none">
-            <circle cx="18" cy="18" r="14" stroke="#2dd4bf" stroke-width="1.5" opacity="0.5"/>
-            <circle cx="18" cy="18" r="7" stroke="#2dd4bf" stroke-width="1.5"/>
-            <circle cx="18" cy="18" r="2" fill="#2dd4bf"/>
-            <line x1="18" y1="4" x2="18" y2="11" stroke="#2dd4bf" stroke-width="1.5"/>
-            <line x1="18" y1="25" x2="18" y2="32" stroke="#2dd4bf" stroke-width="1.5"/>
-            <line x1="4" y1="18" x2="11" y2="18" stroke="#2dd4bf" stroke-width="1.5"/>
-            <line x1="25" y1="18" x2="32" y2="18" stroke="#2dd4bf" stroke-width="1.5"/>
+    <header class="auth-top">
+      <div class="auth-brand">
+        <span class="auth-brand-mark">
+          <svg width="34" height="34" viewBox="0 0 72 72" fill="none">
+            <circle cx="36" cy="36" r="30" stroke="currentColor" stroke-width="2" opacity="0.5" />
+            <circle cx="36" cy="36" r="16" stroke="currentColor" stroke-width="2" />
+            <line x1="36" y1="5" x2="36" y2="67" stroke="currentColor" stroke-width="2" />
+            <line x1="5" y1="36" x2="67" y2="36" stroke="currentColor" stroke-width="2" />
           </svg>
-          Puppet
         </span>
+        <strong>Puppet</strong>
       </div>
-    </div>
+      <nav class="auth-nav">
+        <span>产品特性</span>
+        <span>文档</span>
+        <span>社区</span>
+      </nav>
+    </header>
 
-    <!-- Right: login card -->
-    <div class="lp-right">
-      <div class="lp-card">
-        <!-- Animated compass logo -->
-        <div class="lp-logo">
-          <svg class="lp-logo-ring" width="72" height="72" viewBox="0 0 72 72" fill="none">
-            <circle cx="36" cy="36" r="32" stroke="#2dd4bf" stroke-width="1" stroke-dasharray="6 4" opacity="0.4"/>
-            <circle cx="36" cy="36" r="24" stroke="#2dd4bf" stroke-width="1" opacity="0.25"/>
-          </svg>
-          <svg class="lp-logo-core" width="72" height="72" viewBox="0 0 72 72" fill="none">
-            <circle cx="36" cy="36" r="16" stroke="#2dd4bf" stroke-width="1.5" opacity="0.7"/>
-            <circle cx="36" cy="36" r="5" fill="#2dd4bf" opacity="0.9"/>
-            <line x1="36" y1="12" x2="36" y2="22" stroke="#2dd4bf" stroke-width="1.5"/>
-            <line x1="36" y1="50" x2="36" y2="60" stroke="#2dd4bf" stroke-width="1.5"/>
-            <line x1="12" y1="36" x2="22" y2="36" stroke="#2dd4bf" stroke-width="1.5"/>
-            <line x1="50" y1="36" x2="60" y2="36" stroke="#2dd4bf" stroke-width="1.5"/>
-            <polygon points="36,20 38.5,28 36,26 33.5,28" fill="#2dd4bf" opacity="0.8"/>
-          </svg>
+    <main class="auth-main">
+      <section class="hero-copy">
+        <div class="eyebrow">Pipeline Automation Platform</div>
+        <h1>以<span>傀儡</span>之力<br />驱动自动化任务</h1>
+        <p>灵偶执令，万事皆可自动化</p>
+
+        <div class="pipeline-steps">
+          <div class="step-line" />
+          <div v-for="(step, index) in steps" :key="step.name" class="step" :style="{ animationDelay: `${index * 120}ms` }">
+            <span class="step-node">✓</span>
+            <span class="step-symbol">{{ step.symbol }}</span>
+            <span class="step-name">{{ step.name }}</span>
+            <span class="step-check">✓</span>
+          </div>
         </div>
 
-        <h2 class="lp-card-title">Puppet</h2>
-        <p class="lp-card-sub">以傀儡之力，驱动自动化任务</p>
+        <blockquote>真正的自动化，是让灵偶替你执掌繁琐，你专注于创造与成长。</blockquote>
+      </section>
 
-        <form class="lp-form" @submit.prevent="submit">
-          <div class="lp-field" :class="{ 'lp-field--focus': focus === 'user' }">
-            <svg class="lp-field-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      <div class="login-column">
+        <div class="status-bar">
+          <span class="status-dot" />
+          <span>{{ statusText }}</span>
+          <span>最近成功：{{ latestSuccessText }}</span>
+          <strong>Puppet</strong>
+        </div>
+
+        <section class="login-card" aria-label="登录">
+          <div class="card-mark">
+            <svg class="mark-ring" width="76" height="76" viewBox="0 0 76 76" fill="none">
+              <circle cx="38" cy="38" r="33" stroke="currentColor" stroke-dasharray="7 5" opacity="0.5" />
+              <circle cx="38" cy="38" r="20" stroke="currentColor" opacity="0.68" />
+              <circle cx="38" cy="38" r="5" fill="currentColor" />
+              <line x1="38" y1="9" x2="38" y2="27" stroke="currentColor" />
+              <line x1="38" y1="49" x2="38" y2="67" stroke="currentColor" />
+              <line x1="9" y1="38" x2="27" y2="38" stroke="currentColor" />
+              <line x1="49" y1="38" x2="67" y2="38" stroke="currentColor" />
             </svg>
-            <input
-              v-model="form.username"
-              class="lp-input"
-              placeholder="账号"
-              autocomplete="username"
-              @focus="focus = 'user'"
-              @blur="focus = ''"
-            />
           </div>
 
-          <div class="lp-field" :class="{ 'lp-field--focus': focus === 'pwd' }">
-            <svg class="lp-field-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-            <input
-              v-model="form.password"
-              :type="showPwd ? 'text' : 'password'"
-              class="lp-input"
-              placeholder="密码"
-              autocomplete="current-password"
-              @focus="focus = 'pwd'"
-              @blur="focus = ''"
-              @keyup.enter="submit"
-            />
-            <button type="button" class="lp-eye" @click="showPwd = !showPwd">
-              <svg v-if="!showPwd" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-              </svg>
-              <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                <line x1="1" y1="1" x2="23" y2="23"/>
-              </svg>
+          <h2>Puppet</h2>
+          <p class="card-subtitle">以傀儡之力，驱动自动化任务</p>
+
+          <form class="login-form" @submit.prevent="submit">
+            <label class="field" :class="{ active: focus === 'user' }">
+              <span class="field-icon">⌾</span>
+              <input
+                v-model="form.username"
+                autocomplete="username"
+                placeholder="账号 / 邮箱"
+                @focus="focus = 'user'"
+                @blur="focus = ''"
+              />
+            </label>
+
+            <label class="field" :class="{ active: focus === 'pwd' }">
+              <span class="field-icon">▣</span>
+              <input
+                v-model="form.password"
+                :type="showPwd ? 'text' : 'password'"
+                autocomplete="current-password"
+                placeholder="密码"
+                @focus="focus = 'pwd'"
+                @blur="focus = ''"
+              />
+              <button type="button" class="eye" @click="showPwd = !showPwd">{{ showPwd ? '隐藏' : '显示' }}</button>
+            </label>
+
+            <button class="submit" type="submit" :disabled="loading">
+              <span v-if="!loading">登 录</span>
+              <span v-else class="spinner" />
             </button>
-          </div>
+          </form>
 
-          <button type="submit" class="lp-submit" :disabled="loading">
-            <span v-if="!loading">登 录</span>
-            <span v-else class="lp-spin" />
-          </button>
-        </form>
-
-        <div v-if="errorMsg" class="lp-error">{{ errorMsg }}</div>
+          <div v-if="errorMsg" class="error">{{ errorMsg }}</div>
+        </section>
       </div>
-    </div>
+    </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/api'
+import type { PublicStatus } from '@/types'
+
 const router = useRouter()
 const loading = ref(false)
 const showPwd = ref(false)
 const focus = ref('')
 const errorMsg = ref('')
 const form = reactive({ username: '', password: '' })
+const publicStatus = ref<PublicStatus | null>(null)
+let statusTimer: number | undefined
 
 const steps = [
-  { name: 'Clone' },
-  { name: 'Build' },
-  { name: 'Deploy' },
-  { name: 'Success' },
+  { name: 'Build', symbol: '⚙' },
+  { name: 'Deploy', symbol: '◇' },
+  { name: 'Run', symbol: '□' },
+  { name: 'Success', symbol: '✓' },
 ]
+
+const statusText = computed(() => {
+  if (!publicStatus.value) return '流水线状态加载中'
+  if (publicStatus.value.runningCount > 0) return `${publicStatus.value.runningCount} 条流水线正在运行`
+  return '所有流水线运行正常'
+})
+
+const latestSuccessText = computed(() => {
+  const value = publicStatus.value?.latestSuccessAt
+  if (!value) return '暂无成功记录'
+  return formatRelativeTime(value)
+})
+
+onMounted(() => {
+  loadPublicStatus()
+  statusTimer = window.setInterval(loadPublicStatus, 30000)
+})
+
+onBeforeUnmount(() => {
+  if (statusTimer) window.clearInterval(statusTimer)
+})
+
+async function loadPublicStatus() {
+  try {
+    publicStatus.value = await api.publicStatus()
+  } catch {
+    publicStatus.value = null
+  }
+}
+
+function formatRelativeTime(value: string) {
+  const elapsed = Date.now() - new Date(value).getTime()
+  if (!Number.isFinite(elapsed) || elapsed < 0) return '刚刚'
+  const seconds = Math.floor(elapsed / 1000)
+  if (seconds < 60) return '刚刚'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes} 分钟前`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} 小时前`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days} 天前`
+  return new Date(value).toLocaleString()
+}
 
 async function submit() {
   if (!form.username || !form.password) return
@@ -166,429 +184,434 @@ async function submit() {
 </script>
 
 <style scoped>
-/* ── Reset & root ──────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-.lp {
+.auth-page {
   position: fixed;
   inset: 0;
-  display: flex;
   overflow: hidden;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  min-width: 320px;
+  background: #07101f;
+  color: #eef6ff;
+  display: block;
+  place-items: initial;
 }
 
-/* ── Background ────────────────────────────────────────── */
-.lp-bg {
+.auth-bg {
   position: absolute;
   inset: 0;
-  background-image: url('/bg.png');
+  background-image: url('/login-bg-rich.png');
   background-size: cover;
-  background-position: center top;
-  z-index: 0;
+  background-position: center center;
 }
-/* Dark atmospheric overlay */
-.lp-bg::after {
+
+.auth-bg::after {
   content: '';
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 60% 70% at 38% 55%, rgba(45,212,191,0.05) 0%, transparent 65%),
-    linear-gradient(135deg, rgba(5,10,25,0.62) 0%, rgba(8,16,38,0.58) 50%, rgba(5,10,22,0.68) 100%);
+    radial-gradient(circle at 31% 43%, rgba(45, 212, 191, 0.08), transparent 34%),
+    linear-gradient(90deg, rgba(4, 10, 22, 0.08), rgba(5, 12, 26, 0.04) 48%, rgba(5, 12, 26, 0.42) 74%, rgba(4, 9, 18, 0.74)),
+    linear-gradient(180deg, rgba(3, 8, 18, 0.38), rgba(3, 8, 18, 0.02) 42%, rgba(3, 8, 18, 0.44));
 }
 
-/* ── Left panel ─────────────────────────────────────────── */
-.lp-left {
+.auth-top {
   position: relative;
-  z-index: 1;
-  width: 58%;
+  z-index: 2;
+  height: 72px;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   justify-content: space-between;
-  padding: 52px 56px 36px;
+  padding: 0 clamp(42px, 5vw, 72px);
+  border-bottom: 1px solid rgba(222, 238, 244, 0.14);
+  background: linear-gradient(180deg, rgba(3, 10, 22, 0.76), rgba(3, 10, 22, 0.18));
 }
 
-.lp-left-inner {
-  flex: 1;
+.auth-brand,
+.auth-nav,
+.status-bar,
+.step,
+.field,
+.submit {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding-bottom: 40px;
+  align-items: center;
 }
 
-.lp-eyebrow {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #2dd4bf;
-  border: 1px solid rgba(45,212,191,0.3);
-  padding: 4px 12px;
-  border-radius: 20px;
-  margin-bottom: 28px;
-  width: fit-content;
+.auth-brand {
+  gap: 12px;
+  color: rgba(238, 229, 208, 0.95);
 }
 
-.lp-headline {
-  font-size: clamp(32px, 4vw, 52px);
-  font-weight: 700;
-  line-height: 1.18;
-  color: #e8f0fe;
-  letter-spacing: -0.01em;
-  margin-bottom: 16px;
+.auth-brand-mark {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: transparent;
+  color: #65f4e3;
+  font-weight: inherit;
+  filter: drop-shadow(0 0 12px rgba(45, 212, 191, 0.42));
 }
 
-.lp-em {
-  font-style: normal;
-  color: #2dd4bf;
-  text-shadow: 0 0 32px rgba(45,212,191,0.4);
-}
-
-.lp-tagline {
-  font-size: 15px;
-  color: #5d7490;
-  margin-bottom: 48px;
+.auth-brand strong {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 27px;
   letter-spacing: 0.02em;
 }
 
-/* Pipeline steps */
-.lp-steps {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  margin-bottom: 48px;
-  padding-left: 2px;
-}
-
-.lp-steps-track {
-  position: absolute;
-  left: 17px;
-  top: 20px;
-  bottom: 20px;
-  width: 1px;
-  background: linear-gradient(to bottom, rgba(45,212,191,0.5), rgba(45,212,191,0.1));
-}
-
-.lp-step {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  opacity: 0;
-  transform: translateX(-12px);
-  animation: stepIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-@keyframes stepIn {
-  to { opacity: 1; transform: translateX(0); }
-}
-
-.lp-step-node {
-  position: relative;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: #2dd4bf;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  box-shadow: 0 0 0 4px rgba(45,212,191,0.12), 0 0 12px rgba(45,212,191,0.3);
-  z-index: 1;
-}
-
-.lp-step-pulse {
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  border: 1px solid rgba(45,212,191,0.4);
-  animation: stepPulse 2.5s ease-in-out infinite;
-}
-
-.lp-step:nth-child(2) .lp-step-pulse { animation-delay: 0.3s; }
-.lp-step:nth-child(3) .lp-step-pulse { animation-delay: 0.6s; }
-.lp-step:nth-child(4) .lp-step-pulse { animation-delay: 0.9s; }
-
-@keyframes stepPulse {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 0; transform: scale(1.5); }
-}
-
-.lp-step-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: #a0b4cc;
-  letter-spacing: 0.04em;
-}
-
-/* Quote */
-.lp-quote {
-  position: relative;
-  font-size: 13px;
-  line-height: 1.8;
-  color: #4d6278;
-  padding-left: 20px;
-  border-left: 2px solid rgba(45,212,191,0.25);
-  font-style: normal;
-  max-width: 360px;
-}
-
-.lp-quote-mark {
-  font-size: 28px;
-  line-height: 0;
-  vertical-align: -10px;
-  color: rgba(45,212,191,0.3);
-  margin-right: 4px;
-  font-family: Georgia, serif;
-}
-
-/* Status bar */
-.lp-statusbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-  color: #3d5068;
-}
-
-.lp-statusbar-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #2dd4bf;
-  box-shadow: 0 0 6px #2dd4bf;
-  flex-shrink: 0;
-  animation: blink 2.4s ease-in-out infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
-.lp-statusbar-sep { color: #253545; }
-
-.lp-statusbar-brand {
+.auth-nav {
   margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #2d4058;
+  gap: 44px;
+  color: rgba(225, 235, 244, 0.76);
+  font-size: 14px;
   font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
 
-/* ── Right panel ────────────────────────────────────────── */
-.lp-right {
+.auth-main {
   position: relative;
   z-index: 1;
-  width: 42%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 52px 40px 32px;
+  min-height: calc(100vh - 72px);
+  display: grid;
+  grid-template-columns: minmax(300px, 35%) minmax(620px, 65%);
 }
 
-/* Glassmorphism card */
-.lp-card {
-  width: 100%;
-  max-width: 380px;
-  background: rgba(6, 12, 30, 0.72);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid rgba(45,212,191,0.14);
-  border-radius: 18px;
-  padding: 44px 40px 40px;
-  box-shadow:
-    0 0 0 1px rgba(0,0,0,0.3),
-    0 24px 64px rgba(0,0,0,0.5),
-    0 0 80px rgba(45,212,191,0.04) inset;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+.hero-copy {
+  width: min(300px, 25vw);
+  padding: clamp(104px, 15vh, 148px) 0 96px clamp(36px, 4vw, 68px);
 }
 
-/* Rotating compass logo */
-.lp-logo {
+.eyebrow {
+  width: fit-content;
+  margin-bottom: 22px;
+  padding: 5px 13px;
+  border: 1px solid rgba(45, 212, 191, 0.42);
+  border-radius: 999px;
+  background: rgba(3, 14, 27, 0.42);
+  color: #40f0dd;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.hero-copy h1 {
+  margin: 0 0 14px;
+  color: #edf6ff;
+  font-size: clamp(28px, 2.45vw, 38px);
+  line-height: 1.18;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
+}
+
+.hero-copy h1 span {
+  color: #2dd4bf;
+  text-shadow: 0 0 32px rgba(45, 212, 191, 0.48);
+}
+
+.hero-copy p {
+  margin: 0 0 30px;
+  color: rgba(218, 229, 240, 0.82);
+  font-size: 15px;
+}
+
+.pipeline-steps {
   position: relative;
-  width: 72px;
-  height: 72px;
+  width: 170px;
+  display: grid;
+  gap: 10px;
   margin-bottom: 22px;
 }
 
-.lp-logo-ring {
+.step-line {
   position: absolute;
-  inset: 0;
-  animation: rotateSlow 18s linear infinite;
+  top: 24px;
+  bottom: 24px;
+  left: 23px;
+  width: 1px;
+  background: linear-gradient(#2dd4bf, rgba(45, 212, 191, 0.08));
 }
 
-.lp-logo-core {
-  position: absolute;
-  inset: 0;
+.step {
+  position: relative;
+  min-height: 36px;
+  gap: 8px;
+  padding: 5px 9px 5px 5px;
+  border: 1px solid rgba(45, 212, 191, 0.3);
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgba(5, 18, 31, 0.74), rgba(21, 51, 58, 0.34));
+  box-shadow: inset 0 0 18px rgba(45, 212, 191, 0.05), 0 8px 24px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transform: translateX(-10px);
+  animation: step-in 420ms ease forwards;
 }
 
-@keyframes rotateSlow {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+@keyframes step-in {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-.lp-card-title {
-  font-size: 26px;
-  font-weight: 700;
-  color: #ddeeff;
-  letter-spacing: 0.08em;
-  margin-bottom: 7px;
+.step-node {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #2dd4bf;
+  color: #06131b;
+  font-weight: 900;
+  box-shadow: 0 0 0 5px rgba(45, 212, 191, 0.12);
 }
 
-.lp-card-sub {
-  font-size: 12px;
-  color: #3d5878;
-  letter-spacing: 0.04em;
-  margin-bottom: 36px;
+.step-symbol {
+  width: 16px;
   text-align: center;
+  color: rgba(238, 229, 208, 0.88);
 }
 
-/* Form */
-.lp-form {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
+.step-name {
+  color: rgba(238, 229, 208, 0.94);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.step-check {
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(45, 212, 191, 0.58);
+  border-radius: 50%;
+  color: #65f4e3;
+  font-size: 12px;
+}
+
+blockquote {
+  max-width: 270px;
+  margin: 0;
+  padding: 14px 0 14px 20px;
+  border-left: 2px solid rgba(45, 212, 191, 0.42);
+  color: rgba(220, 231, 240, 0.76);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.login-column {
+  align-self: start;
+  justify-self: end;
+  width: min(390px, calc(100vw - 48px));
+  margin: clamp(46px, 8vh, 82px) clamp(36px, 5vw, 96px) 36px 24px;
+  display: grid;
   gap: 14px;
 }
 
-.lp-field {
-  position: relative;
-  display: flex;
-  align-items: center;
-  background: rgba(255,255,255,0.035);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 9px;
-  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+.login-card {
+  width: 100%;
+  padding: 34px 38px 34px;
+  border: 1px solid rgba(221, 236, 238, 0.3);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(190, 213, 226, 0.22), rgba(17, 37, 54, 0.46)),
+    rgba(9, 22, 36, 0.5);
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(45, 212, 191, 0.08);
+  backdrop-filter: blur(22px) saturate(128%);
 }
 
-.lp-field--focus {
-  background: rgba(45,212,191,0.04);
-  border-color: rgba(45,212,191,0.35);
-  box-shadow: 0 0 0 3px rgba(45,212,191,0.08);
+.card-mark {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 18px;
+  color: #66f5e4;
+  filter: drop-shadow(0 0 18px rgba(45, 212, 191, 0.42));
 }
 
-.lp-field-icon {
-  padding: 0 0 0 14px;
-  color: #3d5878;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  transition: color 0.2s;
+.mark-ring {
+  animation: spin-slow 18s linear infinite;
 }
 
-.lp-field--focus .lp-field-icon { color: #2dd4bf; }
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
-.lp-input {
-  flex: 1;
-  background: none;
-  border: none;
-  outline: none;
-  padding: 13px 12px;
+.login-card h2 {
+  margin: 0;
+  color: rgba(238, 229, 208, 0.96);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 36px;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+
+.card-subtitle {
+  margin: 10px 0 30px;
+  color: rgba(223, 234, 242, 0.58);
   font-size: 14px;
-  color: #c8daf0;
-  font-family: inherit;
+  text-align: center;
+}
+
+.login-form {
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  min-height: 54px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 8px;
+  background: rgba(226, 235, 244, 0.72);
+  transition: border-color 160ms, box-shadow 160ms, background 160ms;
+}
+
+.field.active {
+  border-color: rgba(45, 212, 191, 0.52);
+  background: rgba(238, 246, 250, 0.86);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
+}
+
+.field-icon {
+  width: 48px;
+  text-align: center;
+  color: #536b7e;
+  font-weight: 800;
+}
+
+.field input {
   width: 100%;
-}
-
-.lp-input::placeholder { color: #2e4560; }
-
-.lp-input:-webkit-autofill,
-.lp-input:-webkit-autofill:hover,
-.lp-input:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0 1000px rgba(6, 14, 36, 0.95) inset !important;
-  -webkit-text-fill-color: #c8daf0 !important;
-  caret-color: #c8daf0;
-  transition: background-color 9999s ease-in-out 0s;
-}
-
-.lp-eye {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0 14px;
-  color: #2e4560;
-  display: flex;
-  align-items: center;
-  transition: color 0.2s;
-  flex-shrink: 0;
-}
-.lp-eye:hover { color: #2dd4bf; }
-
-/* Submit button */
-.lp-submit {
-  width: 100%;
-  margin-top: 6px;
-  padding: 13px;
-  background: linear-gradient(135deg, #1fbeac 0%, #2dd4bf 50%, #22c4b0 100%);
-  border: none;
-  border-radius: 9px;
-  color: #051015;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #24394c;
+  font: inherit;
   font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+}
+
+.field input::placeholder {
+  color: rgba(55, 74, 91, 0.74);
+}
+
+.eye {
+  flex: 0 0 auto;
+  margin-right: 12px;
+  border: 0;
+  background: transparent;
+  color: #536b7e;
   cursor: pointer;
-  transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 4px 20px rgba(45,212,191,0.25), 0 0 0 1px rgba(45,212,191,0.2);
-  display: flex;
-  align-items: center;
+  font-size: 12px;
+}
+
+.submit {
+  min-height: 56px;
   justify-content: center;
-  min-height: 46px;
+  margin-top: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0f817a, #21c7b8 48%, #0b6f69);
+  color: #eefdfb;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  box-shadow: 0 14px 30px rgba(20, 188, 174, 0.26);
 }
 
-.lp-submit:hover:not(:disabled) {
-  opacity: 0.92;
-  transform: translateY(-1px);
-  box-shadow: 0 8px 28px rgba(45,212,191,0.35), 0 0 0 1px rgba(45,212,191,0.3);
+.submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
-.lp-submit:active:not(:disabled) { transform: translateY(0); }
-.lp-submit:disabled { opacity: 0.45; cursor: not-allowed; }
-
-/* Spinner */
-.lp-spin {
+.spinner {
   width: 18px;
   height: 18px;
-  border: 2px solid rgba(5,16,20,0.3);
-  border-top-color: rgba(5,16,20,0.9);
+  border: 2px solid rgba(255, 255, 255, 0.38);
+  border-top-color: white;
   border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  display: inline-block;
+  animation: spin-slow 800ms linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Error */
-.lp-error {
+.error {
   margin-top: 14px;
-  font-size: 12px;
-  color: #f87171;
+  padding: 10px 12px;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.1);
+  color: #fecaca;
   text-align: center;
-  padding: 8px 12px;
-  background: rgba(248,113,113,0.08);
-  border: 1px solid rgba(248,113,113,0.18);
-  border-radius: 7px;
-  width: 100%;
+  font-size: 13px;
 }
 
-/* ── Responsive ─────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .lp-left { display: none; }
-  .lp-right { width: 100%; padding: 24px; }
+.status-bar {
+  position: relative;
+  z-index: 1;
+  min-height: 48px;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border: 1px solid rgba(222, 238, 244, 0.12);
+  border-radius: 8px;
+  background: rgba(4, 13, 24, 0.72);
+  color: rgba(222, 234, 245, 0.72);
+  font-size: 12px;
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.32);
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #40f0dd;
+  box-shadow: 0 0 14px rgba(45, 212, 191, 0.84);
+}
+
+.status-bar strong {
+  color: rgba(238, 229, 208, 0.78);
+}
+
+@media (max-width: 980px) {
+  .auth-top {
+    padding: 0 24px;
+  }
+
+  .auth-nav,
+  .hero-copy {
+    display: none;
+  }
+
+  .auth-main {
+    display: grid;
+    grid-template-columns: 1fr;
+    min-height: calc(100vh - 72px);
+  }
+
+  .login-column {
+    align-self: start;
+    margin: clamp(24px, 6vh, 46px) 24px 24px;
+    justify-self: center;
+  }
+
+  .status-bar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lp-step,
-  .lp-step-pulse,
-  .lp-logo-ring,
-  .lp-statusbar-dot,
-  .lp-spin { animation: none; }
-  .lp-step { opacity: 1; transform: none; }
+  .step,
+  .mark-ring,
+  .spinner {
+    animation: none;
+  }
+
+  .step {
+    opacity: 1;
+    transform: none;
+  }
 }
 </style>

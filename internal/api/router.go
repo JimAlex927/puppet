@@ -24,6 +24,7 @@ import (
 	"puppet/internal/model"
 	"puppet/internal/node"
 	"puppet/internal/project"
+	"puppet/internal/runfiles"
 	"puppet/internal/sharedfiles"
 	"puppet/internal/task"
 
@@ -43,6 +44,7 @@ type Handler struct {
 	creds          *credential.Service
 	auths          *auth.Service
 	sharedFiles    *sharedfiles.Service
+	runFiles       *runfiles.Service
 }
 
 type resolvedRunInput struct {
@@ -52,7 +54,15 @@ type resolvedRunInput struct {
 	Required bool     `json:"required"`
 	Default  any      `json:"default,omitempty"`
 	Options  []string `json:"options"`
+	Multiple bool     `json:"multiple,omitempty"`
 	Error    string   `json:"error,omitempty"`
+}
+
+type pageResult[T any] struct {
+	Items    []T   `json:"items"`
+	Total    int64 `json:"total"`
+	Page     int   `json:"page"`
+	PageSize int   `json:"pageSize"`
 }
 
 func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.Registry, runner *engine.Engine, hub *logstream.Hub, cfg config.Config) *gin.Engine {
@@ -63,6 +73,10 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 	sharedFiles, err := sharedfiles.NewService(db, cfg.SharedFilesDir, "/api/shared-file-uploads/")
 	if err != nil {
 		panic(fmt.Sprintf("initialize shared files: %v", err))
+	}
+	runFiles, err := runfiles.NewService(db, cfg.WorkspaceDir, "/api/task-run-file-uploads/")
+	if err != nil {
+		panic(fmt.Sprintf("initialize run files: %v", err))
 	}
 
 	agentSvc := agent.NewService(db)
@@ -80,6 +94,7 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 		creds:          credential.NewService(db),
 		auths:          auth.NewService(db),
 		sharedFiles:    sharedFiles,
+		runFiles:       runFiles,
 	}
 
 	// Public webhook endpoint — no auth required, validated by per-task token.
@@ -96,6 +111,9 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 
 	api := r.Group("/api")
 	{
+		api.GET("/public/status", h.publicStatus)
+		api.GET("/public/shared-files/:token/download", h.downloadSharedFileShare)
+
 		api.POST("/auth/login", h.login)
 		api.POST("/auth/logout", h.authMiddleware(), h.logout)
 		api.GET("/auth/me", h.authMiddleware(), h.me)
@@ -109,6 +127,7 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 			protected.GET("/dashboard/summary", h.dashboardSummary)
 
 			protected.GET("/shared-files", h.listSharedFiles)
+			protected.POST("/shared-files/:id/share", h.createSharedFileShare)
 			protected.DELETE("/shared-files/:id", h.deleteSharedFile)
 			protected.GET("/shared-files/:id/download", h.downloadSharedFile)
 			protected.Any("/shared-file-uploads", h.handleSharedFileUpload)
@@ -139,12 +158,17 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 			protected.GET("/tasks/:id/run-config", h.getRunConfig)
 
 			protected.POST("/tasks/:id/run", h.runTask)
+			protected.POST("/tasks/:id/runs/prepare", h.prepareTaskRun)
 			protected.GET("/tasks/:id/runs", h.listTaskRuns)
 			protected.GET("/task-runs/:id", h.getTaskRun)
+			protected.POST("/task-runs/:id/start", h.startTaskRun)
 			protected.POST("/task-runs/:id/cancel", h.cancelTaskRun)
 			protected.GET("/task-runs/:id/node-runs", h.listNodeRuns)
 			protected.GET("/task-runs/:id/logs", h.listRunLogs)
 			protected.GET("/task-runs/:id/events", h.taskRunEvents)
+			protected.Any("/task-run-file-uploads", h.handleTaskRunFileUpload)
+			protected.Any("/task-run-file-uploads/", h.handleTaskRunFileUpload)
+			protected.Any("/task-run-file-uploads/:uploadID", h.handleTaskRunFileUpload)
 
 			protected.GET("/agents", h.listAgents)
 			protected.POST("/agents", h.createAgent)
@@ -229,6 +253,26 @@ func bearerToken(c *gin.Context) string {
 	return header[len(prefix):]
 }
 
+func pagination(c *gin.Context) (int, int, bool) {
+	pageText := strings.TrimSpace(c.Query("page"))
+	pageSizeText := strings.TrimSpace(c.Query("pageSize"))
+	if pageText == "" && pageSizeText == "" {
+		return 0, 0, false
+	}
+	page, err := strconv.Atoi(pageText)
+	if err != nil || page < 1 {
+		page = 1
+	}
+	pageSize, err := strconv.Atoi(pageSizeText)
+	if err != nil || pageSize < 1 {
+		pageSize = 12
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	return page, pageSize, true
+}
+
 func (h *Handler) login(c *gin.Context) {
 	var req auth.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -247,6 +291,44 @@ func (h *Handler) logout(c *gin.Context) {
 func (h *Handler) me(c *gin.Context) {
 	user, _ := c.Get("user")
 	ok(c, user)
+}
+
+func (h *Handler) publicStatus(c *gin.Context) {
+	var runningCount int64
+	if err := h.db.Model(&model.TaskRun{}).
+		Where("status IN ?", []string{model.TaskRunPending, model.TaskRunRunning}).
+		Count(&runningCount).Error; err != nil {
+		respond(c, nil, err)
+		return
+	}
+
+	var latestSuccess model.TaskRun
+	err := h.db.
+		Where("status = ?", model.TaskRunSuccess).
+		Order("finished_at desc, id desc").
+		First(&latestSuccess).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		ok(c, gin.H{
+			"healthy":         runningCount == 0,
+			"runningCount":    runningCount,
+			"latestSuccessAt": nil,
+		})
+		return
+	}
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	latestSuccessAt := latestSuccess.FinishedAt
+	if latestSuccessAt == nil {
+		latestSuccessAt = &latestSuccess.CreatedAt
+	}
+
+	ok(c, gin.H{
+		"healthy":         runningCount == 0,
+		"runningCount":    runningCount,
+		"latestSuccessAt": latestSuccessAt,
+	})
 }
 
 func (h *Handler) listUsers(c *gin.Context) {
@@ -308,6 +390,34 @@ func (h *Handler) listSharedFiles(c *gin.Context) {
 	respond(c, files, err)
 }
 
+func (h *Handler) createSharedFileShare(c *gin.Context) {
+	var req struct {
+		ExpiresInMinutes int `json:"expiresInMinutes"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	var expiresAt *time.Time
+	if req.ExpiresInMinutes > 0 {
+		t := time.Now().Add(time.Duration(req.ExpiresInMinutes) * time.Minute)
+		expiresAt = &t
+	}
+	createdBy := ""
+	if current, exists := c.Get("user"); exists {
+		if user, ok := current.(model.User); ok {
+			createdBy = user.Username
+		}
+	}
+	share, err := h.sharedFiles.CreateShare(paramID(c, "id"), expiresAt, createdBy)
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	ok(c, gin.H{
+		"token":     share.Token,
+		"expiresAt": share.ExpiresAt,
+		"url":       "/api/public/shared-files/" + share.Token + "/download",
+	})
+}
+
 func (h *Handler) downloadSharedFile(c *gin.Context) {
 	file, err := h.sharedFiles.Get(paramID(c, "id"))
 	if err != nil {
@@ -316,6 +426,21 @@ func (h *Handler) downloadSharedFile(c *gin.Context) {
 	}
 	if _, err := os.Stat(file.StoragePath); err != nil {
 		respond(c, nil, err)
+		return
+	}
+	c.Header("Content-Type", file.ContentType)
+	c.Header("Content-Disposition", "attachment; filename="+strconv.Quote(file.Name))
+	c.File(file.StoragePath)
+}
+
+func (h *Handler) downloadSharedFileShare(c *gin.Context) {
+	file, _, err := h.sharedFiles.FileByShareToken(c.Param("token"))
+	if err != nil {
+		fail(c, http.StatusNotFound, errors.New("share link is invalid or expired"))
+		return
+	}
+	if _, err := os.Stat(file.StoragePath); err != nil {
+		fail(c, http.StatusNotFound, errors.New("file not found"))
 		return
 	}
 	c.Header("Content-Type", file.ContentType)
@@ -339,6 +464,18 @@ func (h *Handler) handleSharedFileUpload(c *gin.Context) {
 }
 
 func (h *Handler) listProjects(c *gin.Context) {
+	if page, pageSize, ok := pagination(c); ok {
+		var total int64
+		var projects []model.Project
+		query := h.db.Model(&model.Project{})
+		if err := query.Count(&total).Error; err != nil {
+			respond(c, nil, err)
+			return
+		}
+		err := query.Order("id desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&projects).Error
+		respond(c, pageResult[model.Project]{Items: projects, Total: total, Page: page, PageSize: pageSize}, err)
+		return
+	}
 	projects, err := h.projects.List()
 	respond(c, projects, err)
 }
@@ -415,6 +552,19 @@ func (h *Handler) importProject(c *gin.Context) {
 }
 
 func (h *Handler) listTasks(c *gin.Context) {
+	if page, pageSize, ok := pagination(c); ok {
+		projectID := paramID(c, "id")
+		var total int64
+		var tasks []model.Task
+		query := h.db.Model(&model.Task{}).Where("project_id = ?", projectID)
+		if err := query.Count(&total).Error; err != nil {
+			respond(c, nil, err)
+			return
+		}
+		err := query.Order("id desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&tasks).Error
+		respond(c, pageResult[model.Task]{Items: tasks, Total: total, Page: page, PageSize: pageSize}, err)
+		return
+	}
 	tasks, err := h.tasks.ListByProject(paramID(c, "id"))
 	respond(c, tasks, err)
 }
@@ -564,7 +714,7 @@ func (h *Handler) webhookTrigger(c *gin.Context) {
 		respond(c, nil, err)
 		return
 	}
-	input, err := h.normalizeRunInput(c.Request.Context(), pipeline, req.Input)
+	input, err := h.normalizeRunInput(c.Request.Context(), pipeline, req.Input, false)
 	if err != nil {
 		fail(c, http.StatusBadRequest, err)
 		return
@@ -591,7 +741,7 @@ func (h *Handler) runTask(c *gin.Context) {
 		respond(c, nil, err)
 		return
 	}
-	input, err := h.normalizeRunInput(c.Request.Context(), pipeline, req.Input)
+	input, err := h.normalizeRunInput(c.Request.Context(), pipeline, req.Input, false)
 	if err != nil {
 		fail(c, http.StatusBadRequest, err)
 		return
@@ -606,6 +756,46 @@ func (h *Handler) runTask(c *gin.Context) {
 	respond(c, run, err)
 }
 
+func (h *Handler) prepareTaskRun(c *gin.Context) {
+	var req struct {
+		Input map[string]any `json:"input"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	taskID := paramID(c, "id")
+	pipeline, err := h.tasks.Pipeline(taskID)
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	input, err := h.normalizeRunInput(c.Request.Context(), pipeline, req.Input, true)
+	if err != nil {
+		fail(c, http.StatusBadRequest, err)
+		return
+	}
+	triggeredBy := "local-user"
+	if current, exists := c.Get("user"); exists {
+		if user, ok := current.(model.User); ok {
+			triggeredBy = user.Username
+		}
+	}
+	run, err := h.engine.PrepareTaskRun(c.Request.Context(), taskID, "manual", triggeredBy, input)
+	respond(c, run, err)
+}
+
+func (h *Handler) startTaskRun(c *gin.Context) {
+	runID := paramID(c, "id")
+	if err := h.validatePreparedFileInputs(runID); err != nil {
+		fail(c, http.StatusBadRequest, err)
+		return
+	}
+	run, err := h.engine.StartPreparedTaskRun(c.Request.Context(), runID)
+	respond(c, run, err)
+}
+
+func (h *Handler) handleTaskRunFileUpload(c *gin.Context) {
+	h.runFiles.ServeUpload(c.Writer, c.Request)
+}
+
 func (h *Handler) resolveRunInputs(ctx context.Context, pipeline node.PipelineDefinition) ([]resolvedRunInput, error) {
 	resolved := make([]resolvedRunInput, 0, len(pipeline.Inputs))
 	for _, input := range pipeline.Inputs {
@@ -616,6 +806,7 @@ func (h *Handler) resolveRunInputs(ctx context.Context, pipeline node.PipelineDe
 			Required: input.Required,
 			Default:  input.Default,
 			Options:  input.Options,
+			Multiple: input.Multiple,
 		}
 		if item.Options == nil {
 			item.Options = []string{}
@@ -649,7 +840,7 @@ func (h *Handler) fetchSourceOptions(ctx context.Context, source *node.InputSour
 	return valuesToStrings(result.Output["options"]), nil
 }
 
-func (h *Handler) normalizeRunInput(ctx context.Context, pipeline node.PipelineDefinition, input map[string]any) (map[string]any, error) {
+func (h *Handler) normalizeRunInput(ctx context.Context, pipeline node.PipelineDefinition, input map[string]any, allowPendingFiles bool) (map[string]any, error) {
 	resolved, err := h.resolveRunInputs(ctx, pipeline)
 	if err != nil {
 		return nil, err
@@ -667,6 +858,14 @@ func (h *Handler) normalizeRunInput(ctx context.Context, pipeline node.PipelineD
 			empty = false
 		}
 		if item.Required && empty {
+			if allowPendingFiles && item.Type == "file" {
+				if item.Multiple {
+					normalized[item.Name] = []string{}
+				} else {
+					normalized[item.Name] = ""
+				}
+				continue
+			}
 			return nil, fmt.Errorf("input %q is required", item.Name)
 		}
 		// Skip select validation when source failed (options may be empty due to error).
@@ -683,10 +882,43 @@ func inputIsEmpty(value any, inputType string, exists bool) bool {
 	if !exists || value == nil {
 		return true
 	}
+	if inputType == "file" {
+		switch typed := value.(type) {
+		case []any:
+			return len(typed) == 0
+		case []string:
+			return len(typed) == 0
+		}
+	}
 	if inputType == "boolean" || inputType == "number" {
 		return false
 	}
 	return strings.TrimSpace(fmt.Sprint(value)) == ""
+}
+
+func (h *Handler) validatePreparedFileInputs(runID uint) error {
+	var run model.TaskRun
+	if err := h.db.First(&run, runID).Error; err != nil {
+		return err
+	}
+	var pipeline node.PipelineDefinition
+	if err := json.Unmarshal([]byte(run.PipelineSnapshotJSON), &pipeline); err != nil {
+		return err
+	}
+	input := map[string]any{}
+	if strings.TrimSpace(run.InputJSON) != "" {
+		_ = json.Unmarshal([]byte(run.InputJSON), &input)
+	}
+	for _, item := range pipeline.Inputs {
+		if item.Type != "file" || !item.Required {
+			continue
+		}
+		value, exists := input[item.Name]
+		if inputIsEmpty(value, item.Type, exists) {
+			return fmt.Errorf("input %q is required", item.Name)
+		}
+	}
+	return nil
 }
 
 func (h *Handler) listTaskRuns(c *gin.Context) {

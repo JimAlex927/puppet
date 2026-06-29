@@ -2,12 +2,15 @@ package sharedfiles
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"puppet/internal/model"
 
@@ -93,6 +96,9 @@ func (s *Service) Delete(id uint) error {
 		return err
 	}
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("shared_file_id = ?", id).Delete(&model.SharedFileShare{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Delete(&model.SharedFile{}, id).Error; err != nil {
 			return err
 		}
@@ -101,6 +107,39 @@ func (s *Service) Delete(id uint) error {
 		}
 		return nil
 	})
+}
+
+func (s *Service) CreateShare(fileID uint, expiresAt *time.Time, createdBy string) (model.SharedFileShare, error) {
+	if _, err := s.Get(fileID); err != nil {
+		return model.SharedFileShare{}, err
+	}
+	token, err := randomToken()
+	if err != nil {
+		return model.SharedFileShare{}, err
+	}
+	share := model.SharedFileShare{
+		SharedFileID: fileID,
+		Token:        token,
+		ExpiresAt:    expiresAt,
+		CreatedBy:    createdBy,
+	}
+	err = s.db.Create(&share).Error
+	return share, err
+}
+
+func (s *Service) FileByShareToken(token string) (model.SharedFile, model.SharedFileShare, error) {
+	var share model.SharedFileShare
+	if strings.TrimSpace(token) == "" {
+		return model.SharedFile{}, share, gorm.ErrRecordNotFound
+	}
+	if err := s.db.Where("token = ?", token).First(&share).Error; err != nil {
+		return model.SharedFile{}, share, err
+	}
+	if share.ExpiresAt != nil && time.Now().After(*share.ExpiresAt) {
+		return model.SharedFile{}, share, fmt.Errorf("share link expired")
+	}
+	file, err := s.Get(share.SharedFileID)
+	return file, share, err
 }
 
 func (s *Service) saveCompletedUpload(hook tusd.HookEvent) error {
@@ -174,6 +213,14 @@ func sanitizeDisplayName(name string) string {
 		return "download"
 	}
 	return name
+}
+
+func randomToken() (string, error) {
+	content := make([]byte, 24)
+	if _, err := rand.Read(content); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(content), nil
 }
 
 func removeUploadFiles(path string) error {

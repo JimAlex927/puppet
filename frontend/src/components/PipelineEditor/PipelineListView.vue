@@ -80,16 +80,18 @@
                 <el-option label="下拉" value="select" />
                 <el-option label="开关" value="boolean" />
                 <el-option label="数字" value="number" />
+                <el-option label="文件" value="file" />
               </el-select>
               <el-checkbox v-model="input.required" size="small">必填</el-checkbox>
               <el-input
-                v-if="input.type !== 'boolean'"
+                v-if="input.type !== 'boolean' && input.type !== 'file'"
                 v-model="input.default as string"
                 placeholder="默认值"
                 size="small"
                 style="width: 110px"
               />
-              <el-switch v-else v-model="input.default as boolean" size="small" />
+              <el-switch v-else-if="input.type === 'boolean'" v-model="input.default as boolean" size="small" />
+              <el-checkbox v-else v-model="input.multiple" size="small">多文件</el-checkbox>
               <el-button
                 :icon="Delete"
                 circle
@@ -231,6 +233,12 @@ function onTypeChange(input: PipelineInput) {
   if (input.type !== 'select') {
     input.source = undefined
     input.optionsText = ''
+  }
+  if (input.type !== 'file') {
+    input.multiple = undefined
+  }
+  if (input.type === 'file') {
+    input.default = undefined
   }
 }
 </script>

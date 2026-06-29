@@ -42,6 +42,7 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 		&model.User{},
 		&model.Session{},
 		&model.SharedFile{},
+		&model.SharedFileShare{},
 	); err != nil {
 		return nil, err
 	}

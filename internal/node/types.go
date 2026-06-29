@@ -75,7 +75,7 @@ type AgentSelector struct {
 }
 
 // PipelineInput defines a user-facing parameter shown before a task run.
-// Type is one of: "string", "select", "boolean", "number".
+// Type is one of: "string", "select", "boolean", "number", "file".
 // For select inputs: Options holds static choices; Source (if set) fetches
 // choices dynamically and takes precedence over Options.
 type PipelineInput struct {
@@ -86,6 +86,7 @@ type PipelineInput struct {
 	Default  any          `json:"default,omitempty"`
 	Options  []string     `json:"options,omitempty"`
 	Source   *InputSource `json:"source,omitempty"`
+	Multiple bool         `json:"multiple,omitempty"`
 }
 
 type PipelineNode struct {

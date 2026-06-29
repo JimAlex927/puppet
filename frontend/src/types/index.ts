@@ -14,6 +14,13 @@ export interface Project {
   updatedAt: string
 }
 
+export interface PageResult<T> {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 export interface Task {
   id: number
   projectId: number
@@ -112,6 +119,12 @@ export interface LoginResponse {
   user: User
 }
 
+export interface PublicStatus {
+  healthy: boolean
+  runningCount: number
+  latestSuccessAt?: string | null
+}
+
 export interface UserInput {
   username: string
   displayName: string
@@ -150,6 +163,12 @@ export interface SharedFile {
   uploadedBy: string
   createdAt: string
   updatedAt: string
+}
+
+export interface SharedFileShare {
+  token: string
+  expiresAt?: string | null
+  url: string
 }
 
 export interface NodeField {
@@ -197,11 +216,12 @@ export interface InputSource {
 export interface PipelineInput {
   name: string
   label: string
-  type: 'string' | 'select' | 'boolean' | 'number'
+  type: 'string' | 'select' | 'boolean' | 'number' | 'file'
   required: boolean
   default?: unknown
   options?: string[]
   source?: InputSource
+  multiple?: boolean
   // UI-only helper, not sent to backend
   optionsText?: string
 }

@@ -12,6 +12,7 @@
       <input ref="fileInput" class="hidden-file" type="file" accept=".zip,application/zip" @change="importFile" />
     </div>
 
+    <div v-loading="loading" class="project-list-wrap">
     <div v-if="projects.length" class="project-grid">
       <div
         v-for="project in projects"
@@ -44,7 +45,21 @@
       </div>
     </div>
 
-    <el-empty v-else description="还没有项目，创建第一个吧" :image-size="80" />
+    <el-empty v-else-if="!loading" description="还没有项目，创建第一个吧" :image-size="80" />
+
+    <div v-if="total > pageSize" class="pagination-row">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[12, 24, 48, 96]"
+        layout="total, sizes, prev, pager, next"
+        background
+        @current-change="load"
+        @size-change="onPageSizeChange"
+      />
+    </div>
+    </div>
 
     <el-dialog v-model="dialogVisible" :title="editId ? '编辑项目' : '新建项目'" width="440px" @closed="resetForm">
       <el-form label-position="top">
@@ -74,16 +89,36 @@ import type { Project } from '@/types'
 import { fmtDate } from '@/utils/format'
 
 const projects = ref<Project[]>([])
+const loading = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const importing = ref(false)
 const fileInput = ref<HTMLInputElement>()
 const editId = ref<number | null>(null)
+const page = ref(1)
+const pageSize = ref(12)
+const total = ref(0)
 
 const form = reactive({ name: '', description: '' })
 
 async function load() {
-  projects.value = await api.projects()
+  loading.value = true
+  try {
+    const result = await api.projectsPage(page.value, pageSize.value)
+    projects.value = result.items
+    total.value = result.total
+    if (projects.value.length === 0 && total.value > 0 && page.value > 1) {
+      page.value -= 1
+      await load()
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+function onPageSizeChange() {
+  page.value = 1
+  load()
 }
 
 function resetForm() {
@@ -112,6 +147,7 @@ async function save() {
     } else {
       await api.createProject(form)
       ElMessage.success('已创建')
+      page.value = 1
     }
     dialogVisible.value = false
     await load()
@@ -139,6 +175,7 @@ async function importFile(event: Event) {
   try {
     const project = await api.importProject(file)
     ElMessage.success(`已导入：${project.name}`)
+    page.value = 1
     await load()
   } finally {
     importing.value = false
@@ -175,6 +212,10 @@ onMounted(load)
 
 .hidden-file {
   display: none;
+}
+
+.project-list-wrap {
+  min-height: 220px;
 }
 
 .project-grid {
@@ -258,5 +299,11 @@ onMounted(load)
 .pc-date {
   font-size: 11px;
   color: #94a3b8;
+}
+
+.pagination-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
 }
 </style>

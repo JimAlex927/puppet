@@ -10,6 +10,7 @@
     </div>
 
     <!-- Task cards -->
+    <div v-loading="loading" class="task-list-wrap">
     <div v-if="taskItems.length" class="task-grid">
       <div
         v-for="item in taskItems"
@@ -65,7 +66,21 @@
       </div>
     </div>
 
-    <el-empty v-else description="还没有任务，创建第一个吧" :image-size="80" />
+    <el-empty v-else-if="!loading" description="还没有任务，创建第一个吧" :image-size="80" />
+
+    <div v-if="total > pageSize" class="pagination-row">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[12, 24, 48, 96]"
+        layout="total, sizes, prev, pager, next"
+        background
+        @current-change="load"
+        @size-change="onPageSizeChange"
+      />
+    </div>
+    </div>
 
     <!-- Create / Edit dialog -->
     <el-dialog v-model="dialogVisible" :title="editId ? '编辑任务' : '新建任务'" width="480px" @closed="resetForm">
@@ -114,10 +129,14 @@ const projectId = Number(route.params.id)
 const project = ref<Project>()
 const tasks = ref<Task[]>([])
 const recentRuns = ref<Map<number, TaskRun>>(new Map())
+const loading = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const editId = ref<number | null>(null)
 const runDialog = ref<InstanceType<typeof RunTaskDialog>>()
+const page = ref(1)
+const pageSize = ref(12)
+const total = ref(0)
 
 const form = reactive({
   name: '',
@@ -134,23 +153,39 @@ const taskItems = computed(() =>
 )
 
 async function load() {
-  const [proj, taskList] = await Promise.all([
-    api.project(projectId),
-    api.tasks(projectId),
-  ])
-  project.value = proj
-  tasks.value = taskList
+  loading.value = true
+  try {
+    const [proj, taskPage] = await Promise.all([
+      api.project(projectId),
+      api.tasksPage(projectId, page.value, pageSize.value),
+    ])
+    project.value = proj
+    tasks.value = taskPage.items
+    total.value = taskPage.total
+    if (tasks.value.length === 0 && total.value > 0 && page.value > 1) {
+      page.value -= 1
+      await load()
+      return
+    }
 
-  // Load recent runs for each task (take the first/latest one)
-  const runLists = await Promise.all(
-    taskList.map((t) => api.taskRuns(t.id).catch(() => [] as TaskRun[])),
-  )
-  const map = new Map<number, TaskRun>()
-  for (let i = 0; i < taskList.length; i++) {
-    const latest = runLists[i][0]
-    if (latest) map.set(taskList[i].id, latest)
+    // Load recent runs for each task on the current page (take the first/latest one)
+    const runLists = await Promise.all(
+      tasks.value.map((t) => api.taskRuns(t.id).catch(() => [] as TaskRun[])),
+    )
+    const map = new Map<number, TaskRun>()
+    for (let i = 0; i < tasks.value.length; i++) {
+      const latest = runLists[i][0]
+      if (latest) map.set(tasks.value[i].id, latest)
+    }
+    recentRuns.value = map
+  } finally {
+    loading.value = false
   }
-  recentRuns.value = map
+}
+
+function onPageSizeChange() {
+  page.value = 1
+  load()
 }
 
 function resetForm() {
@@ -211,6 +246,10 @@ onMounted(load)
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
+}
+
+.task-list-wrap {
+  min-height: 220px;
 }
 
 .task-card {
@@ -322,6 +361,12 @@ onMounted(load)
   color: #cbd5e1;
   padding: 8px 0;
   border-top: 1px solid #f1f5f9;
+}
+
+.pagination-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
 }
 
 .tc-footer {
