@@ -77,6 +77,49 @@
           </div>
         </div>
 
+        <!-- Context viewer -->
+        <div class="run-context">
+          <div class="rc-header">
+            <span>{{ selectedNodeRun ? '节点上下文' : '运行上下文' }}</span>
+            <span class="rc-sub">{{ selectedNodeRun ? selectedNodeRun.nodeId : `taskrun-${run.id}` }}</span>
+          </div>
+
+          <template v-if="selectedNodeRun">
+            <div class="rc-grid">
+              <div><span>节点</span><strong>{{ selectedNodeRun.nodeName }}</strong></div>
+              <div><span>类型</span><strong>{{ selectedNodeRun.nodeType }}</strong></div>
+              <div><span>状态</span><strong>{{ selectedNodeRun.status }}</strong></div>
+              <div><span>重试</span><strong>{{ selectedNodeRun.retryCount }}</strong></div>
+              <div><span>耗时</span><strong>{{ fmtDuration(selectedNodeRun.durationMs) }}</strong></div>
+              <div><span>工作目录</span><strong>{{ workspaceHint }}</strong></div>
+            </div>
+            <div v-if="selectedNodeRun.errorMessage" class="rc-error">{{ selectedNodeRun.errorMessage }}</div>
+            <div class="rc-block">
+              <div class="rc-block-title">展开后的参数</div>
+              <pre>{{ prettyJSON(selectedNodeParams) }}</pre>
+            </div>
+            <div class="rc-block">
+              <div class="rc-block-title">节点输出</div>
+              <pre>{{ prettyJSON(selectedNodeOutput) }}</pre>
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="rc-grid">
+              <div><span>Run ID</span><strong>#{{ run.id }}</strong></div>
+              <div><span>Task ID</span><strong>#{{ run.taskId }}</strong></div>
+              <div><span>触发</span><strong>{{ run.triggerType || '—' }}</strong></div>
+              <div><span>工作目录</span><strong>{{ workspaceHint }}</strong></div>
+              <div><span>Agent</span><strong>{{ agentLabelsText }}</strong></div>
+              <div><span>节点数</span><strong>{{ pipelineSnapshot?.nodes.length ?? 0 }}</strong></div>
+            </div>
+            <div class="rc-block">
+              <div class="rc-block-title">运行参数</div>
+              <pre>{{ prettyJSON(runInputObject) }}</pre>
+            </div>
+          </template>
+        </div>
+
         <!-- Log viewer -->
         <div ref="logViewer" class="run-log">
           <div
@@ -121,6 +164,29 @@ const pipelineSnapshot = computed<PipelineDefinition | null>(() => {
 const inputEntries = computed<[string, unknown][]>(() => {
   if (!run.value?.inputJson) return []
   try { return Object.entries(JSON.parse(run.value.inputJson)) } catch { return [] }
+})
+
+const runInputObject = computed<Record<string, unknown>>(() => parseJSONRecord(run.value?.inputJson))
+
+const selectedNodeRun = computed(() =>
+  selectedNodeRunId.value === null
+    ? undefined
+    : nodeRuns.value.find((item) => item.id === selectedNodeRunId.value),
+)
+
+const selectedNodeParams = computed<Record<string, unknown>>(() =>
+  parseJSONRecord(selectedNodeRun.value?.paramsSnapshotJson),
+)
+
+const selectedNodeOutput = computed<Record<string, unknown>>(() =>
+  parseJSONRecord(selectedNodeRun.value?.outputJson),
+)
+
+const workspaceHint = computed(() => run.value ? `data/workspaces/taskrun-${run.value.id}` : '—')
+
+const agentLabelsText = computed(() => {
+  const labels = pipelineSnapshot.value?.agentSelector?.labels ?? []
+  return labels.length ? labels.join(', ') : 'local'
 })
 
 const filteredLogs = computed(() => {
@@ -192,6 +258,21 @@ function logClass(log: RunLog) {
   if (c.includes('[node:failed]') || c.includes('status=failed') || c.includes(' error=') || c.includes(' failed:')) classes.push('log-failed')
   else if (c.includes('[node:start]') || c.includes('[node:end]') || c.includes('status=success') || c.includes(' succeeded')) classes.push('log-success')
   return classes
+}
+
+function parseJSONRecord(content?: string): Record<string, unknown> {
+  if (!content) return {}
+  try {
+    const parsed = JSON.parse(content)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : { value: parsed }
+  } catch {
+    return { raw: content }
+  }
+}
+
+function prettyJSON(value: unknown) {
+  if (!value || (typeof value === 'object' && Object.keys(value as Record<string, unknown>).length === 0)) return '{}'
+  return JSON.stringify(value, null, 2)
 }
 
 onMounted(async () => { await load(); connect() })
@@ -316,6 +397,104 @@ onBeforeUnmount(() => sse?.close())
 .rn-name { font-size: 12px; font-weight: 600; color: #c4cad4; }
 .rn-sub  { font-size: 11px; color: #64748b; margin-top: 2px; }
 .rn-err  { font-size: 11px; color: #f87171; margin-top: 2px; }
+
+/* Context viewer */
+.run-context {
+  flex-shrink: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-bottom: 1px solid #2d2e3d;
+  background: #111827;
+}
+
+.run-context::-webkit-scrollbar { width: 4px; }
+.run-context::-webkit-scrollbar-thumb { background: #2d2e3d; border-radius: 2px; }
+
+.rc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rc-sub {
+  color: #64748b;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.rc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.rc-grid div {
+  min-width: 0;
+  background: #1a1b23;
+  border: 1px solid #2d2e3d;
+  border-radius: 6px;
+  padding: 6px 7px;
+}
+
+.rc-grid span {
+  display: block;
+  color: #64748b;
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+
+.rc-grid strong {
+  display: block;
+  color: #c4cad4;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rc-error {
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.35);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.rc-block + .rc-block { margin-top: 8px; }
+
+.rc-block-title {
+  color: #8892a4;
+  font-size: 10px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.rc-block pre {
+  margin: 0;
+  max-height: 130px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #bfdbfe;
+  background: #0c1220;
+  border: 1px solid #1e2a3d;
+  border-radius: 6px;
+  padding: 7px 8px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+}
 
 /* Log viewer */
 .run-log {
