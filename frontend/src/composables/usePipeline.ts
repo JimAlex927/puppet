@@ -1,12 +1,9 @@
 import { computed, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api'
 import type { Credential, InputSource, NodeMetadata, PipelineDefinition, PipelineInput, PipelineNode, Task } from '@/types'
 
 export function usePipeline(taskId: number) {
-  const router = useRouter()
-
   const pipeline = ref<PipelineDefinition | null>(null)
   const task = ref<Task | null>(null)
   const projectName = ref('')
@@ -140,7 +137,6 @@ export function usePipeline(taskId: number) {
         api.savePipeline(taskId, serializePipeline(pipeline.value)),
       ])
       ElMessage.success('已保存')
-      router.push(`/projects/${task.value.projectId}`)
     } finally {
       saving.value = false
     }

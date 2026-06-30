@@ -17,6 +17,7 @@ import (
 	"puppet/internal/model"
 	"puppet/internal/node"
 	archivenode "puppet/internal/nodes/archive"
+	filenode "puppet/internal/nodes/file"
 	"puppet/internal/nodes/git"
 	httpnode "puppet/internal/nodes/http"
 	processnode "puppet/internal/nodes/process"
@@ -64,6 +65,7 @@ func main() {
 	cfg.registry.Register(processnode.NewStop())
 	cfg.registry.Register(archivenode.NewCompress())
 	cfg.registry.Register(archivenode.NewExtract())
+	cfg.registry.Register(filenode.NewDelete())
 	plugins := pluginhost.New(cfg.pluginDir)
 	defer plugins.Stop()
 	if err := plugins.Register(cfg.registry); err != nil {

@@ -46,6 +46,40 @@ func TestBuildSilentCommandCmdOmitsCommandEcho(t *testing.T) {
 	}
 }
 
+func TestBuildCommandPowerShellFailsOnMissingCommandWithoutDebugTrace(t *testing.T) {
+	if _, err := exec.LookPath("pwsh"); err != nil {
+		t.Skip("pwsh not found")
+	}
+
+	out, err := runShell("Definitely-Missing-Puppet-Command\nWrite-Output \"after\"", "pwsh")
+	if err == nil {
+		t.Fatalf("expected pwsh command to fail; output:\n%s", out)
+	}
+	if strings.Contains(out, "after") {
+		t.Fatalf("script continued after missing command; output:\n%s", out)
+	}
+	if strings.Contains(out, "DEBUG:") {
+		t.Fatalf("stdout contains PowerShell debug trace; output:\n%s", out)
+	}
+}
+
+func TestBuildCommandCmdFailsOnMissingCommandBeforeLaterSuccess(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("cmd is only available on Windows")
+	}
+	if _, err := exec.LookPath("cmd"); err != nil {
+		t.Skip("cmd not found")
+	}
+
+	out, err := runShell("definitely_missing_puppet_command_12345\necho after", "cmd")
+	if err == nil {
+		t.Fatalf("expected cmd command to fail; output:\n%s", out)
+	}
+	if strings.Contains(out, "after") {
+		t.Fatalf("script continued after missing command; output:\n%s", out)
+	}
+}
+
 func runSilentShell(t *testing.T, script, shell string) string {
 	t.Helper()
 
@@ -63,6 +97,20 @@ func runSilentShell(t *testing.T, script, shell string) string {
 		t.Fatalf("run command: %v; output:\n%s", err, out)
 	}
 	return string(out)
+}
+
+func runShell(script, shell string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd, cleanup, err := BuildCommand(ctx, script, shell)
+	if err != nil {
+		return "", err
+	}
+	defer cleanup()
+
+	out, err := cmd.CombinedOutput()
+	return string(out), err
 }
 
 func nonEmptyLines(out string) []string {

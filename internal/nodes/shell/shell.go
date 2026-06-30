@@ -89,6 +89,7 @@ func (e *Executor) Execute(ctx *node.NodeContext, params map[string]any) (*node.
 	}
 	ctx.Log("stdout", fmt.Sprintf("working directory: %s\n", workdir))
 	ctx.Log("stdout", fmt.Sprintf("shell: %s\n", effectiveShell))
+	logScriptCommands(ctx.Log, script)
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
@@ -117,6 +118,19 @@ func scan(pipe any, stream string, log func(string, string), wg *sync.WaitGroup)
 	scanner.Buffer(buf, 1024*1024)
 	for scanner.Scan() {
 		log(stream, scanner.Text()+"\n")
+	}
+}
+
+func logScriptCommands(log func(string, string), script string) {
+	if log == nil {
+		return
+	}
+	for _, line := range strings.Split(strings.ReplaceAll(script, "\r\n", "\n"), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(strings.ToLower(trimmed), "rem ") || strings.HasPrefix(trimmed, "::") {
+			continue
+		}
+		log("stdout", "+ "+trimmed+"\n")
 	}
 }
 

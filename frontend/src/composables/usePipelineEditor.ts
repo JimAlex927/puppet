@@ -1,5 +1,4 @@
 import { computed, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { MarkerType, type Edge, type Node } from '@vue-flow/core'
 import dagre from '@dagrejs/dagre'
@@ -7,8 +6,6 @@ import { api } from '@/api'
 import type { Credential, NodeMetadata, PipelineDefinition, PipelineInput, PipelineNode, Task } from '@/types'
 
 export function usePipelineEditor(taskId: number) {
-  const router = useRouter()
-
   const pipeline = ref<PipelineDefinition | null>(null)
   const task = ref<Task | null>(null)
   const projectName = ref('')
@@ -188,7 +185,6 @@ export function usePipelineEditor(taskId: number) {
         api.savePipeline(taskId, serializePipeline(pipeline.value)),
       ])
       ElMessage.success('已保存')
-      router.push(`/projects/${task.value.projectId}`)
     } finally {
       saving.value = false
     }

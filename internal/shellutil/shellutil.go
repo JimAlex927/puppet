@@ -103,6 +103,13 @@ func buildExplicit(ctx context.Context, script, shell string, silent bool) (*exe
 		if err != nil {
 			return nil, func() {}, fmt.Errorf("%s not found in PATH", shell)
 		}
+		if !silent {
+			if shell == "bash" || shell == "zsh" {
+				script = "set -e\nset -o pipefail\n" + script
+			} else {
+				script = "set -e\n" + script
+			}
+		}
 		return exec.CommandContext(ctx, bin, "-c", script), func() {}, nil
 
 	default:
@@ -132,10 +139,14 @@ func psCommand(ctx context.Context, bin string, bypassPolicy bool, script string
 		"[Console]::OutputEncoding = [Text.Encoding]::UTF8\n" +
 		"$OutputEncoding = [Text.Encoding]::UTF8\n"
 	if !silent {
-		// Set-PSDebug -Trace 1 prints each statement before execution for visibility.
-		content += "Set-PSDebug -Trace 1\n"
+		content += "$ErrorActionPreference = 'Stop'\n" +
+			"if ($PSVersionTable.PSVersion.Major -ge 7) { $PSNativeCommandUseErrorActionPreference = $true }\n" +
+			"trap { Write-Error $_; exit 1 }\n"
 	}
 	content += script
+	if !silent {
+		content += "\nif ($global:LASTEXITCODE -is [int] -and $global:LASTEXITCODE -ne 0) { exit $global:LASTEXITCODE }\n"
+	}
 	if _, err := tmp.WriteString(content); err != nil {
 		tmp.Close()
 		clean()
@@ -163,11 +174,11 @@ func cmdCommand(ctx context.Context, bin string, script string, extension string
 
 	// cmd.exe reads .cmd/.bat files using the system ANSI code page (GBK on
 	// Chinese Windows) regardless of chcp, so encode the file as GBK.
-	// @chcp is silent (@ prefix). Keep echo on for Shell node visibility, but
-	// turn it off for stdout-parsing callers such as dynamic select inputs.
-	prefix := "@chcp 65001 >nul\r\n"
-	if silent {
-		prefix += "@echo off\r\n"
+	// @chcp is silent (@ prefix). Keep command tracing in the Shell node's
+	// own log layer so cmd output stays clean and predictable.
+	prefix := "@chcp 65001 >nul\r\n@echo off\r\n"
+	if !silent {
+		script = withCmdFailChecks(script)
 	}
 	utf8Content := prefix + strings.ReplaceAll(script, "\n", "\r\n") + "\r\n"
 	gbkBytes, err := simplifiedchinese.GBK.NewEncoder().Bytes([]byte(utf8Content))
@@ -181,5 +192,42 @@ func cmdCommand(ctx context.Context, bin string, script string, extension string
 		return nil, func() {}, err
 	}
 	tmp.Close()
-	return exec.CommandContext(ctx, bin, "/c", name), clean, nil
+	args := []string{"/c", name}
+	if !silent {
+		args = []string{"/v:on", "/c", name}
+	}
+	return exec.CommandContext(ctx, bin, args...), clean, nil
+}
+
+func withCmdFailChecks(script string) string {
+	normalized := strings.ReplaceAll(script, "\r\n", "\n")
+	normalized = strings.ReplaceAll(normalized, "\r", "\n")
+	lines := strings.Split(normalized, "\n")
+	out := make([]string, 0, len(lines)*2)
+	for _, line := range lines {
+		out = append(out, line)
+		if shouldCheckCmdError(line) {
+			out = append(out, "if errorlevel 1 exit /b !errorlevel!")
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+func shouldCheckCmdError(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(trimmed, ":") ||
+		strings.HasPrefix(lower, "rem ") ||
+		strings.HasPrefix(lower, "::") ||
+		strings.HasPrefix(lower, "echo ") ||
+		strings.HasPrefix(lower, "@echo ") ||
+		strings.HasPrefix(lower, "setlocal") ||
+		strings.HasPrefix(lower, "endlocal") ||
+		strings.HasSuffix(trimmed, "^") {
+		return false
+	}
+	return true
 }
