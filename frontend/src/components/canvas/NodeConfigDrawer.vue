@@ -39,7 +39,16 @@
         <div v-if="visibleFields.length" class="ncf-section">
           <div class="ncf-section-title">参数配置</div>
           <div v-for="field in visibleFields" :key="field.name" class="ncf-field">
-            <label class="ncf-label">{{ field.label }}</label>
+            <label class="ncf-label">
+              {{ field.label }}
+              <span
+                v-if="supportsTemplate(field)"
+                class="ncf-template-hint"
+                title="运行前会展开 ${input.xxx}、${xxx} 和 ${node.nodeId.key}"
+              >
+                （可用 ${input.xxx}）
+              </span>
+            </label>
 
             <el-input
               v-if="field.type === 'input'"
@@ -166,6 +175,10 @@ async function onSave() {
     saving.value = false
   }
 }
+
+function supportsTemplate(field: NodeField) {
+  return field.type === 'input' || field.type === 'textarea'
+}
 </script>
 
 <style scoped>
@@ -267,6 +280,11 @@ async function onSave() {
   font-size: 11px;
   color: #8892a4;
   margin-bottom: 5px;
+}
+
+.ncf-template-hint {
+  color: #64748b;
+  font-size: 10px;
 }
 
 .ncf-field--inline .ncf-label { margin-bottom: 0; }

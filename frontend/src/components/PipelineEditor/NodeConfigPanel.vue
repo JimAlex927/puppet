@@ -38,7 +38,19 @@
           </el-select>
         </el-form-item>
         <el-divider />
-        <el-form-item v-for="field in visibleFields" :key="field.name" :label="field.label">
+        <el-form-item v-for="field in visibleFields" :key="field.name">
+          <template #label>
+            <span>
+              {{ field.label }}
+              <span
+                v-if="supportsTemplate(field)"
+                class="template-hint"
+                title="运行前会展开 ${input.xxx}、${xxx} 和 ${node.nodeId.key}"
+              >
+                （可用 ${input.xxx}）
+              </span>
+            </span>
+          </template>
           <el-input
             v-if="field.type === 'input'"
             v-model="params[field.name]"
@@ -111,11 +123,20 @@ function isFieldVisible(field: NodeField) {
   if (!field.showWhen) return true
   return params.value[field.showWhen.field] === field.showWhen.equals
 }
+
+function supportsTemplate(field: NodeField) {
+  return field.type === 'input' || field.type === 'textarea'
+}
 </script>
 
 <style scoped>
 h3 {
   margin: 0 0 12px;
   font-size: 15px;
+}
+
+.template-hint {
+  color: #64748b;
+  font-size: 12px;
 }
 </style>
