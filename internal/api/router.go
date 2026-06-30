@@ -39,6 +39,7 @@ type Handler struct {
 	configRegistry *confignode.Registry
 	engine         *engine.Engine
 	hub            *logstream.Hub
+	cfg            config.Config
 	projects       *project.Service
 	tasks          *task.Service
 	agents         *agent.Service
@@ -90,6 +91,7 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 		configRegistry: configRegistry,
 		engine:         runner,
 		hub:            hub,
+		cfg:            cfg,
 		projects:       project.NewService(db),
 		tasks:          task.NewService(db),
 		agents:         agentSvc,
@@ -176,6 +178,10 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 			protected.GET("/task-runs/:id/node-runs", h.listNodeRuns)
 			protected.GET("/task-runs/:id/logs", h.listRunLogs)
 			protected.GET("/task-runs/:id/events", h.taskRunEvents)
+			protected.GET("/task-runs/:id/files", h.listTaskRunFiles)
+			protected.GET("/task-runs/:id/files/download", h.downloadTaskRunFile)
+			protected.POST("/task-runs/:id/file-bundles", h.createTaskRunFileBundle)
+			protected.GET("/task-runs/:id/file-bundles/:bundle/download", h.downloadTaskRunFileBundle)
 			protected.Any("/task-run-file-uploads", h.handleTaskRunFileUpload)
 			protected.Any("/task-run-file-uploads/", h.handleTaskRunFileUpload)
 			protected.Any("/task-run-file-uploads/:uploadID", h.handleTaskRunFileUpload)
