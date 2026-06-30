@@ -95,8 +95,12 @@
             </div>
             <div v-if="selectedNodeRun.errorMessage" class="rc-error">{{ selectedNodeRun.errorMessage }}</div>
             <div class="rc-block">
-              <div class="rc-block-title">展开后的参数</div>
+              <div class="rc-block-title">节点参数快照</div>
               <pre>{{ prettyJSON(selectedNodeParams) }}</pre>
+            </div>
+            <div class="rc-block">
+              <div class="rc-block-title">展开后的参数</div>
+              <pre>{{ prettyJSON(selectedNodeExpandedParams) }}</pre>
             </div>
             <div class="rc-block">
               <div class="rc-block-title">节点输出</div>
@@ -176,6 +180,10 @@ const selectedNodeRun = computed(() =>
 
 const selectedNodeParams = computed<Record<string, unknown>>(() =>
   parseJSONRecord(selectedNodeRun.value?.paramsSnapshotJson),
+)
+
+const selectedNodeExpandedParams = computed<Record<string, unknown>>(() =>
+  expandRuntimePlaceholders(selectedNodeParams.value),
 )
 
 const selectedNodeOutput = computed<Record<string, unknown>>(() =>
@@ -273,6 +281,28 @@ function parseJSONRecord(content?: string): Record<string, unknown> {
 function prettyJSON(value: unknown) {
   if (!value || (typeof value === 'object' && Object.keys(value as Record<string, unknown>).length === 0)) return '{}'
   return JSON.stringify(value, null, 2)
+}
+
+function expandRuntimePlaceholders(value: unknown): Record<string, unknown> {
+  const expanded = expandValue(value)
+  return expanded && typeof expanded === 'object' && !Array.isArray(expanded)
+    ? expanded as Record<string, unknown>
+    : { value: expanded }
+}
+
+function expandValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return value.split('${workspace}').join(workspaceHint.value)
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => expandValue(item))
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, expandValue(item)]),
+    )
+  }
+  return value
 }
 
 onMounted(async () => { await load(); connect() })
