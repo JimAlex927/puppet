@@ -107,6 +107,27 @@ export interface RunLog {
   createdAt: string
 }
 
+export interface TaskRunFileEntry {
+  name: string
+  path: string
+  isDir: boolean
+  size: number
+  modTime: string
+}
+
+export interface TaskRunFileList {
+  path: string
+  parent: string
+  entries: TaskRunFileEntry[]
+}
+
+export interface TaskRunFileBundle {
+  id: string
+  status: 'running' | 'ready' | 'failed' | string
+  message?: string
+  downloadUrl?: string
+}
+
 export interface Agent {
   id: number
   name: string

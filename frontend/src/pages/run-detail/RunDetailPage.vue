@@ -153,8 +153,100 @@
       </div>
     </div>
 
-    <div v-else-if="run && activeTab === 'files'" class="run-files-placeholder">
-      <el-empty description="运行文件浏览器即将显示在这里" />
+    <div v-else-if="run && activeTab === 'files'" class="run-files">
+      <div class="run-files-toolbar">
+        <div class="rf-path-box">
+          <span class="rf-label">目录</span>
+          <span class="rf-path">{{ fileList?.path || '根目录' }}</span>
+        </div>
+        <el-space>
+          <el-button
+            size="small"
+            :icon="ArrowUp"
+            :disabled="!fileList?.path"
+            @click="loadTaskRunFiles(fileList?.parent || '')"
+          >
+            上级
+          </el-button>
+          <el-button size="small" :icon="Refresh" :loading="fileLoading" @click="loadTaskRunFiles(filePath)">
+            刷新
+          </el-button>
+          <el-button
+            size="small"
+            type="primary"
+            :icon="Download"
+            :disabled="!selectedFilePaths.length"
+            @click="bundleSelectedFiles"
+          >
+            打包下载 {{ selectedFilePaths.length ? `(${selectedFilePaths.length})` : '' }}
+          </el-button>
+        </el-space>
+      </div>
+
+      <div v-if="fileBundles.length" class="rf-bundles">
+        <div v-for="bundle in fileBundles" :key="bundle.id" class="rf-bundle">
+          <div>
+            <span class="rf-bundle-title">打包任务 {{ shortBundleId(bundle.id) }}</span>
+            <span class="rf-bundle-message">{{ bundle.message || bundle.status }}</span>
+          </div>
+          <el-button
+            v-if="bundle.status === 'ready' && bundle.downloadUrl"
+            size="small"
+            type="success"
+            :icon="Download"
+            @click="downloadBundle(bundle)"
+          >
+            下载
+          </el-button>
+          <el-tag v-else-if="bundle.status === 'failed'" size="small" type="danger">失败</el-tag>
+          <el-tag v-else size="small" type="info">处理中</el-tag>
+        </div>
+      </div>
+
+      <el-table
+        class="run-files-table"
+        :data="fileEntries"
+        height="100%"
+        v-loading="fileLoading"
+        empty-text="这个运行目录暂无文件"
+        @selection-change="handleFileSelectionChange"
+      >
+        <el-table-column type="selection" width="44" />
+        <el-table-column label="名称" min-width="320">
+          <template #default="{ row }">
+            <button class="rf-name" @click="openFileEntry(row)">
+              <el-icon :size="16">
+                <Folder v-if="row.isDir" />
+                <Document v-else />
+              </el-icon>
+              <span>{{ row.name }}</span>
+            </button>
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" width="120">
+          <template #default="{ row }">{{ row.isDir ? '文件夹' : '文件' }}</template>
+        </el-table-column>
+        <el-table-column label="大小" width="140">
+          <template #default="{ row }">{{ row.isDir ? '—' : fmtFileSize(row.size) }}</template>
+        </el-table-column>
+        <el-table-column label="修改时间" width="190">
+          <template #default="{ row }">{{ fmtDate(row.modTime) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="110" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              v-if="!row.isDir"
+              size="small"
+              text
+              type="primary"
+              :icon="Download"
+              @click.stop="downloadFile(row)"
+            >
+              下载
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
     </div>
   </div>
 </template>
@@ -162,12 +254,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Back, Refresh } from '@element-plus/icons-vue'
+import { ArrowUp, Back, Document, Download, Folder, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@/api'
 import RunDAG from '@/components/run/RunDAG.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
-import type { NodeRun, PipelineDefinition, RunLog, TaskRun } from '@/types'
+import type { NodeRun, PipelineDefinition, RunLog, TaskRun, TaskRunFileBundle, TaskRunFileEntry, TaskRunFileList } from '@/types'
 import { fmtDate, fmtDuration } from '@/utils/format'
 
 const route = useRoute()
@@ -178,6 +270,11 @@ const nodeRuns = ref<NodeRun[]>([])
 const logs = ref<RunLog[]>([])
 const selectedNodeRunId = ref<number | null>(null)
 const activeTab = ref<'execution' | 'files'>('execution')
+const fileList = ref<TaskRunFileList>()
+const filePath = ref('')
+const fileLoading = ref(false)
+const selectedFilePaths = ref<string[]>([])
+const fileBundles = ref<TaskRunFileBundle[]>([])
 const logViewer = ref<HTMLElement>()
 let sse: EventSource | undefined
 let transientId = -1
@@ -224,6 +321,8 @@ const filteredLogs = computed(() => {
   return logs.value.filter((l) => l.nodeRunId === selectedNodeRunId.value || l.nodeRunId === 0)
 })
 
+const fileEntries = computed(() => fileList.value?.entries ?? [])
+
 function selectByNodeId(nodeId: string) {
   const nr = nodeRuns.value.find((r) => r.nodeId === nodeId)
   selectedNodeRunId.value = nr?.id ?? null
@@ -240,6 +339,7 @@ async function load() {
   run.value = runData
   nodeRuns.value = nodeData
   logs.value = logData
+  if (activeTab.value === 'files') await loadTaskRunFiles(filePath.value)
 }
 
 async function cancelRun() {
@@ -270,12 +370,94 @@ function connect() {
     if (d.run) run.value = d.run
     else if (run.value) run.value.status = d.status
   })
+  sse.addEventListener('file_bundle', (e) => {
+    const d = JSON.parse(e.data) as TaskRunFileBundle
+    applyFileBundleEvent(d)
+  })
+}
+
+async function loadTaskRunFiles(path = '') {
+  fileLoading.value = true
+  try {
+    const data = await api.taskRunFiles(runId, path)
+    fileList.value = data
+    filePath.value = data.path
+    selectedFilePaths.value = []
+  } finally {
+    fileLoading.value = false
+  }
+}
+
+function openFileEntry(entry: TaskRunFileEntry) {
+  if (entry.isDir) {
+    void loadTaskRunFiles(entry.path)
+    return
+  }
+  downloadFile(entry)
+}
+
+function downloadFile(entry: TaskRunFileEntry) {
+  triggerDownload(api.taskRunFileDownloadUrl(runId, entry.path))
+}
+
+function handleFileSelectionChange(selection: TaskRunFileEntry[]) {
+  selectedFilePaths.value = selection.map((entry) => entry.path)
+}
+
+async function bundleSelectedFiles() {
+  if (!selectedFilePaths.value.length) return
+  const bundle = await api.createTaskRunFileBundle(runId, selectedFilePaths.value)
+  applyFileBundleEvent(bundle)
+  ElMessage.info('已开始打包，完成后会显示下载按钮')
+}
+
+function applyFileBundleEvent(bundle: TaskRunFileBundle) {
+  const idx = fileBundles.value.findIndex((item) => item.id === bundle.id)
+  if (idx >= 0) fileBundles.value[idx] = { ...fileBundles.value[idx], ...bundle }
+  else fileBundles.value.unshift(bundle)
+  if (bundle.status === 'ready') ElMessage.success('运行文件打包完成')
+  if (bundle.status === 'failed') ElMessage.error(bundle.message || '运行文件打包失败')
+}
+
+function downloadBundle(bundle: TaskRunFileBundle) {
+  if (!bundle.downloadUrl) return
+  triggerDownload(api.taskRunFileBundleDownloadUrl(bundle.downloadUrl))
+}
+
+function triggerDownload(url: string) {
+  const link = document.createElement('a')
+  link.href = url
+  link.rel = 'noopener'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+}
+
+function shortBundleId(id: string) {
+  return id.length > 8 ? id.slice(0, 8) : id
+}
+
+function fmtFileSize(size: number) {
+  if (!Number.isFinite(size) || size <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = size
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit += 1
+  }
+  const digits = value >= 10 || unit === 0 ? 0 : 1
+  return `${value.toFixed(digits)} ${units[unit]}`
 }
 
 // Auto-scroll logs
 watch(() => logs.value.length, async () => {
   await nextTick()
   if (logViewer.value) logViewer.value.scrollTop = logViewer.value.scrollHeight
+})
+
+watch(activeTab, (tab) => {
+  if (tab === 'files' && !fileList.value) void loadTaskRunFiles()
 })
 
 function logPrefix(log: RunLog) {
@@ -442,11 +624,138 @@ onBeforeUnmount(() => sse?.close())
   overflow: hidden;
 }
 
-.run-files-placeholder {
+.run-files {
   flex: 1;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 14px 16px;
   background: #1a1b23;
+  overflow: hidden;
+}
+
+.run-files-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
+.rf-path-box {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #2d2e3d;
+  border-radius: 6px;
+  background: #111827;
+}
+
+.rf-label {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rf-path {
+  color: #dbeafe;
+  font-size: 12px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rf-bundles {
+  display: grid;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
+.rf-bundle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #2d2e3d;
+  border-radius: 6px;
+  background: #111827;
+}
+
+.rf-bundle-title {
+  display: block;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rf-bundle-message {
+  display: block;
+  margin-top: 2px;
+  color: #8892a4;
+  font-size: 11px;
+}
+
+.run-files-table {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid #2d2e3d;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #111827;
+}
+
+.rf-name {
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #dbeafe;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.rf-name:hover {
+  color: #2dd4bf;
+}
+
+.rf-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.run-files .el-button:not(.el-button--primary):not(.el-button--success)) {
+  background: #252633;
+  border-color: #3a3b4e;
+  color: #c4cad4;
+}
+
+:deep(.run-files .el-button:not(.el-button--primary):not(.el-button--success):hover) {
+  background: #2d2e3d;
+  color: #e2e8f0;
+}
+
+:deep(.run-files-table.el-table) {
+  --el-table-bg-color: #111827;
+  --el-table-tr-bg-color: #111827;
+  --el-table-header-bg-color: #1e1f2e;
+  --el-table-header-text-color: #c4cad4;
+  --el-table-text-color: #c4cad4;
+  --el-table-border-color: #2d2e3d;
+  --el-table-row-hover-bg-color: #1e1f2e;
+  --el-fill-color-lighter: #1e1f2e;
+  --el-text-color-regular: #c4cad4;
 }
 
 /* DAG panel */

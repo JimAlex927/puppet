@@ -18,6 +18,8 @@ import type {
   SharedFile,
   SharedFileShare,
   Task,
+  TaskRunFileBundle,
+  TaskRunFileList,
   TaskRun,
   TaskSchedule,
   TaskScheduleInput,
@@ -103,6 +105,26 @@ export const api = {
   cancelTaskRun: (id: number) => request<TaskRun>({ url: `/task-runs/${id}/cancel`, method: 'POST' }),
   nodeRuns: (runId: number) => request<NodeRun[]>({ url: `/task-runs/${runId}/node-runs` }),
   runLogs: (runId: number) => request<RunLog[]>({ url: `/task-runs/${runId}/logs` }),
+  taskRunFiles: (runId: number, path = '') =>
+    request<TaskRunFileList>({ url: `/task-runs/${runId}/files`, params: { path } }),
+  createTaskRunFileBundle: (runId: number, paths: string[]) =>
+    request<TaskRunFileBundle>({
+      url: `/task-runs/${runId}/file-bundles`,
+      method: 'POST',
+      data: { paths },
+    }),
+  taskRunFileDownloadUrl: (runId: number, path: string) => {
+    const token = localStorage.getItem('puppet_token')
+    const query = new URLSearchParams({ path })
+    if (token) query.set('token', token)
+    return `/api/task-runs/${runId}/files/download?${query.toString()}`
+  },
+  taskRunFileBundleDownloadUrl: (downloadUrl: string) => {
+    const token = localStorage.getItem('puppet_token')
+    if (!token) return downloadUrl
+    const separator = downloadUrl.includes('?') ? '&' : '?'
+    return `${downloadUrl}${separator}token=${encodeURIComponent(token)}`
+  },
 
   agents: () => request<Agent[]>({ url: '/agents' }),
   agent: (id: number) => request<Agent>({ url: `/agents/${id}` }),
