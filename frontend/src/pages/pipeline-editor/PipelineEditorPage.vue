@@ -18,6 +18,7 @@
       />
 
       <el-space>
+        <el-button size="small" :icon="Clock" @click="openHistory">历史</el-button>
         <el-button size="small" :icon="Setting" @click="settingsVisible = true">设置</el-button>
         <el-button size="small" :icon="Back" @click="goBack">返回</el-button>
         <el-button size="small" type="primary" :icon="DocumentChecked" :loading="saving" @click="onSave">
@@ -126,6 +127,61 @@
       <template #footer>
         <el-button @click="settingsVisible = false">关闭</el-button>
       </template>
+    </el-drawer>
+
+    <!-- Pipeline history drawer -->
+    <el-drawer
+      v-model="historyVisible"
+      title="Pipeline 版本历史"
+      direction="rtl"
+      size="520px"
+      :append-to-body="true"
+    >
+      <div class="history-panel" v-loading="historyLoading">
+        <div class="history-toolbar">
+          <span class="history-count">{{ historyVersions.length }} 个版本</span>
+          <el-button size="small" :icon="RefreshLeft" @click="loadHistory">刷新</el-button>
+        </div>
+
+        <div v-if="historyVersions.length" class="history-list">
+          <button
+            v-for="version in historyVersions"
+            :key="version.id"
+            class="history-item"
+            :class="{ 'history-item--active': selectedHistory?.id === version.id }"
+            @click="selectHistory(version)"
+          >
+            <div class="history-main">
+              <span class="history-version">v{{ version.version }}</span>
+              <span class="history-message">{{ historyMessage(version.message) }}</span>
+            </div>
+            <div class="history-meta">
+              <span>{{ version.createdBy || 'system' }}</span>
+              <span>{{ fmtDate(version.createdAt) }}</span>
+            </div>
+          </button>
+        </div>
+        <el-empty v-else description="暂无历史版本" :image-size="72" />
+
+        <div v-if="selectedHistory" class="history-detail">
+          <div class="history-detail-head">
+            <div>
+              <strong>v{{ selectedHistory.version }}</strong>
+              <span>{{ selectedHistorySummary }}</span>
+            </div>
+            <el-button
+              size="small"
+              type="primary"
+              :icon="RefreshLeft"
+              :loading="restoringHistory"
+              @click="restoreHistoryVersion(selectedHistory)"
+            >
+              恢复此版本
+            </el-button>
+          </div>
+          <pre>{{ prettyHistoryJSON(selectedHistory.pipelineJson) }}</pre>
+        </div>
+      </div>
     </el-drawer>
 
     <!-- Input edit dialog -->
@@ -239,15 +295,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Back, Delete, DocumentChecked, EditPen, Plus, Setting } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { Back, Clock, Delete, DocumentChecked, EditPen, Plus, RefreshLeft, Setting } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { api } from '@/api'
 import { usePipelineEditor } from '@/composables/usePipelineEditor'
 import NodePalette from '@/components/canvas/NodePalette.vue'
 import PipelineCanvas from '@/components/canvas/PipelineCanvas.vue'
 import NodeConfigDrawer from '@/components/canvas/NodeConfigDrawer.vue'
-import type { NodeMetadata, PipelineInput } from '@/types'
+import type { NodeMetadata, PipelineDefinition, PipelineInput, PipelineVersion } from '@/types'
+import { fmtDate } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -265,6 +323,18 @@ const {
 
 const canvasRef = ref<InstanceType<typeof PipelineCanvas>>()
 const settingsVisible = ref(false)
+const historyVisible = ref(false)
+const historyLoading = ref(false)
+const restoringHistory = ref(false)
+const historyVersions = ref<PipelineVersion[]>([])
+const selectedHistory = ref<PipelineVersion>()
+
+const selectedHistorySummary = computed(() => {
+  if (!selectedHistory.value) return ''
+  const parsed = parsePipelineJSON(selectedHistory.value.pipelineJson)
+  if (!parsed) return '无法解析 Pipeline 内容'
+  return `${parsed.nodes?.length ?? 0} 个节点，${parsed.inputs?.length ?? 0} 个运行参数`
+})
 
 // ── Pipeline inputs management ─────────────────────────────────
 const inputDialogVisible = ref(false)
@@ -374,6 +444,71 @@ function defaultFieldValue(type: string) {
   if (type === 'credential') return 0
   if (type === 'switch') return false
   return ''
+}
+
+async function openHistory() {
+  historyVisible.value = true
+  if (!historyVersions.value.length) await loadHistory()
+}
+
+async function loadHistory() {
+  historyLoading.value = true
+  try {
+    historyVersions.value = await api.pipelineVersions(taskId)
+    if (!selectedHistory.value && historyVersions.value.length) {
+      selectedHistory.value = historyVersions.value[0]
+    } else if (selectedHistory.value) {
+      selectedHistory.value = historyVersions.value.find(v => v.id === selectedHistory.value?.id) ?? historyVersions.value[0]
+    }
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function selectHistory(version: PipelineVersion) {
+  selectedHistory.value = await api.pipelineVersion(taskId, version.id)
+}
+
+async function restoreHistoryVersion(version: PipelineVersion) {
+  await ElMessageBox.confirm(`确认恢复到 Pipeline v${version.version}？当前 Pipeline 会作为新的历史版本保留。`, '恢复版本', {
+    type: 'warning',
+  })
+  restoringHistory.value = true
+  try {
+    const restored = await api.restorePipelineVersion(taskId, version.id)
+    pipeline.value = restored.pipeline
+    await nextTick()
+    const { nodes, edges } = buildFlowElements()
+    canvasRef.value?.initCanvas(nodes, edges)
+    await loadHistory()
+    selectedHistory.value = restored.version
+    ElMessage.success(`已恢复为 v${version.version}`)
+  } finally {
+    restoringHistory.value = false
+  }
+}
+
+function historyMessage(message: string) {
+  if (message === 'initial') return '初始版本'
+  if (message === 'save') return '保存'
+  if (message.startsWith('restore ')) return message.replace('restore', '恢复')
+  return message || '保存'
+}
+
+function prettyHistoryJSON(content: string) {
+  try {
+    return JSON.stringify(JSON.parse(content), null, 2)
+  } catch {
+    return content
+  }
+}
+
+function parsePipelineJSON(content: string): PipelineDefinition | null {
+  try {
+    return JSON.parse(content) as PipelineDefinition
+  } catch {
+    return null
+  }
 }
 
 // Init canvas once pipeline + canvas are both ready
@@ -515,5 +650,118 @@ onMounted(load)
   font-size: 11px;
   color: var(--el-text-color-secondary);
   margin-top: 2px;
+}
+
+.history-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+}
+
+.history-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-count {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.history-item {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid var(--el-border-color);
+  border-radius: 6px;
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-primary);
+  cursor: pointer;
+}
+
+.history-item:hover,
+.history-item--active {
+  border-color: #2dd4bf;
+  background: rgba(45, 212, 191, 0.08);
+}
+
+.history-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-version {
+  color: #0d9488;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.history-message {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.history-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 5px;
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+}
+
+.history-detail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--el-border-color-lighter);
+  padding-top: 12px;
+}
+
+.history-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.history-detail-head strong {
+  display: block;
+  color: var(--el-text-color-primary);
+  font-size: 14px;
+}
+
+.history-detail-head span {
+  display: block;
+  margin-top: 2px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.history-detail pre {
+  margin: 0;
+  max-height: 42vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #bfdbfe;
+  background: #0c1220;
+  border: 1px solid #1e2a3d;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
 }
 </style>

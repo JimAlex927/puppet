@@ -165,6 +165,9 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 
 			protected.GET("/tasks/:id/pipeline", h.getPipeline)
 			protected.PUT("/tasks/:id/pipeline", h.updatePipeline)
+			protected.GET("/tasks/:id/pipeline/versions", h.listPipelineVersions)
+			protected.GET("/tasks/:id/pipeline/versions/:versionID", h.getPipelineVersion)
+			protected.POST("/tasks/:id/pipeline/versions/:versionID/restore", h.restorePipelineVersion)
 			protected.GET("/node-types", h.nodeTypes)
 			protected.GET("/config-node-types", h.configNodeTypes)
 			protected.GET("/tasks/:id/run-config", h.getRunConfig)
@@ -255,6 +258,17 @@ func (h *Handler) adminOnly() gin.HandlerFunc {
 		fail(c, http.StatusForbidden, errors.New("admin role required"))
 		c.Abort()
 	}
+}
+
+func currentUsername(c *gin.Context) string {
+	user, _ := c.Get("user")
+	if u, ok := user.(model.User); ok {
+		if u.DisplayName != "" {
+			return u.DisplayName
+		}
+		return u.Username
+	}
+	return ""
 }
 
 func bearerToken(c *gin.Context) string {
@@ -693,8 +707,27 @@ func (h *Handler) updatePipeline(c *gin.Context) {
 		fail(c, http.StatusBadRequest, err)
 		return
 	}
-	saved, err := h.tasks.UpdatePipeline(paramID(c, "id"), pipeline)
+	saved, err := h.tasks.UpdatePipeline(paramID(c, "id"), pipeline, currentUsername(c))
 	respond(c, saved, err)
+}
+
+func (h *Handler) listPipelineVersions(c *gin.Context) {
+	versions, err := h.tasks.PipelineVersions(paramID(c, "id"))
+	respond(c, versions, err)
+}
+
+func (h *Handler) getPipelineVersion(c *gin.Context) {
+	version, err := h.tasks.PipelineVersion(paramID(c, "id"), paramID(c, "versionID"))
+	respond(c, version, err)
+}
+
+func (h *Handler) restorePipelineVersion(c *gin.Context) {
+	pipeline, version, err := h.tasks.RestorePipelineVersion(paramID(c, "id"), paramID(c, "versionID"), currentUsername(c))
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	ok(c, gin.H{"pipeline": pipeline, "version": version})
 }
 
 func (h *Handler) nodeTypes(c *gin.Context) {

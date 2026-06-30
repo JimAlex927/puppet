@@ -287,6 +287,16 @@ export interface PipelineDefinition {
   nodes: PipelineNode[]
 }
 
+export interface PipelineVersion {
+  id: number
+  taskId: number
+  version: number
+  pipelineJson: string
+  createdBy: string
+  message: string
+  createdAt: string
+}
+
 export interface RunConfigInput extends PipelineInput {
   options: string[]
   error?: string

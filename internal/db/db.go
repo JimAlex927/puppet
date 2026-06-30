@@ -37,6 +37,7 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 	if err := database.AutoMigrate(
 		&model.Project{},
 		&model.Task{},
+		&model.PipelineVersion{},
 		&model.TaskSchedule{},
 		&model.TaskRun{},
 		&model.NodeRun{},

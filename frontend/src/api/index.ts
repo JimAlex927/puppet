@@ -11,6 +11,7 @@ import type {
   NodeRun,
   PageResult,
   PipelineDefinition,
+  PipelineVersion,
   Project,
   PublicStatus,
   RunLog,
@@ -91,6 +92,15 @@ export const api = {
   pipeline: (taskId: number) => request<PipelineDefinition>({ url: `/tasks/${taskId}/pipeline` }),
   savePipeline: (taskId: number, data: PipelineDefinition) =>
     request<PipelineDefinition>({ url: `/tasks/${taskId}/pipeline`, method: 'PUT', data }),
+  pipelineVersions: (taskId: number) =>
+    request<PipelineVersion[]>({ url: `/tasks/${taskId}/pipeline/versions` }),
+  pipelineVersion: (taskId: number, versionId: number) =>
+    request<PipelineVersion>({ url: `/tasks/${taskId}/pipeline/versions/${versionId}` }),
+  restorePipelineVersion: (taskId: number, versionId: number) =>
+    request<{ pipeline: PipelineDefinition; version: PipelineVersion }>({
+      url: `/tasks/${taskId}/pipeline/versions/${versionId}/restore`,
+      method: 'POST',
+    }),
   nodeTypes: () => request<NodeMetadata[]>({ url: '/node-types' }),
   sourceTypes: () => request<NodeMetadata[]>({ url: '/config-node-types' }),
   runConfig: (taskId: number) => request<RunConfig>({ url: `/tasks/${taskId}/run-config` }),
