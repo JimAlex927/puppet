@@ -36,8 +36,25 @@
       </div>
     </div>
 
+    <div v-if="run" class="run-tabs">
+      <button
+        class="run-tab"
+        :class="{ 'run-tab--active': activeTab === 'execution' }"
+        @click="activeTab = 'execution'"
+      >
+        执行视图
+      </button>
+      <button
+        class="run-tab"
+        :class="{ 'run-tab--active': activeTab === 'files' }"
+        @click="activeTab = 'files'"
+      >
+        运行文件
+      </button>
+    </div>
+
     <!-- ── Main: DAG + Log ────────────────────────────────── -->
-    <div v-if="run" class="run-body">
+    <div v-if="run && activeTab === 'execution'" class="run-body">
       <!-- Left: DAG -->
       <div class="run-dag-panel">
         <RunDAG
@@ -135,6 +152,10 @@
         </div>
       </div>
     </div>
+
+    <div v-else-if="run && activeTab === 'files'" class="run-files-placeholder">
+      <el-empty description="运行文件浏览器即将显示在这里" />
+    </div>
   </div>
 </template>
 
@@ -156,6 +177,7 @@ const run = ref<TaskRun>()
 const nodeRuns = ref<NodeRun[]>([])
 const logs = ref<RunLog[]>([])
 const selectedNodeRunId = ref<number | null>(null)
+const activeTab = ref<'execution' | 'files'>('execution')
 const logViewer = ref<HTMLElement>()
 let sse: EventSource | undefined
 let transientId = -1
@@ -377,12 +399,54 @@ onBeforeUnmount(() => sse?.close())
 
 .rmi-label { color: #64748b; }
 
+/* Tabs */
+.run-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  padding: 0 16px;
+  background: #1e1f2e;
+  border-bottom: 1px solid #2d2e3d;
+  flex-shrink: 0;
+}
+
+.run-tab {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #8892a4;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.run-tab:hover {
+  color: #e2e8f0;
+  background: #252633;
+}
+
+.run-tab--active {
+  color: #2dd4bf;
+  background: rgba(45, 212, 191, 0.1);
+  border-color: rgba(45, 212, 191, 0.35);
+}
+
 /* Main body */
 .run-body {
   flex: 1;
   display: grid;
   grid-template-columns: 1fr 360px;
   overflow: hidden;
+}
+
+.run-files-placeholder {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  background: #1a1b23;
 }
 
 /* DAG panel */
