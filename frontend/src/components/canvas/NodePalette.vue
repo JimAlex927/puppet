@@ -72,7 +72,7 @@ const props = defineProps<{ nodeTypes: NodeMetadata[] }>()
 const emit = defineEmits<{ 'node-click': [meta: NodeMetadata] }>()
 
 const query = ref('')
-const open = reactive(new Set<string>(['process', 'script', 'file']))
+const open = reactive(new Set<string>(['process', 'script', 'file', 'plugin']))
 
 const CAT_LABELS: Record<string, string> = {
   process: '进程',
@@ -81,6 +81,7 @@ const CAT_LABELS: Record<string, string> = {
   sleep:   '延迟',
   git:     'Git',
   file:    '文件',
+  plugin:  '插件',
 }
 
 const CATEGORY_COLOR: Record<string, string> = {
@@ -90,6 +91,7 @@ const CATEGORY_COLOR: Record<string, string> = {
   sleep:   '#94a3b8',
   git:     '#f97316',
   file:    '#22c55e',
+  plugin:  '#a855f7',
   default: '#64748b',
 }
 
@@ -99,6 +101,7 @@ const CATEGORY_ICON: Record<string, unknown> = {
   http:    Connection,
   sleep:   Clock,
   file:    Files,
+  plugin:  Operation,
   default: Operation,
 }
 

@@ -22,6 +22,10 @@
           <el-icon><Files /></el-icon>
           <span>Shared Files</span>
         </el-menu-item>
+        <el-menu-item index="/schedules">
+          <el-icon><Calendar /></el-icon>
+          <span>Schedules</span>
+        </el-menu-item>
         <el-menu-item index="/agents">
           <el-icon><Monitor /></el-icon>
           <span>Agents</span>
@@ -56,7 +60,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, Files, FolderOpened, Key, Monitor, SwitchButton, User } from '@element-plus/icons-vue'
+import { Calendar, DataBoard, Files, FolderOpened, Key, Monitor, SwitchButton, User } from '@element-plus/icons-vue'
 import { api } from '@/api'
 import type { User as UserType } from '@/types'
 

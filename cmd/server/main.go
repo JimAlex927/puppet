@@ -22,6 +22,8 @@ import (
 	processnode "puppet/internal/nodes/process"
 	"puppet/internal/nodes/shell"
 	"puppet/internal/nodes/sleep"
+	"puppet/internal/pluginhost"
+	"puppet/internal/scheduler"
 	"puppet/internal/web"
 )
 
@@ -42,6 +44,11 @@ func main() {
 	registry.Register(processnode.NewStop())
 	registry.Register(archivenode.NewCompress())
 	registry.Register(archivenode.NewExtract())
+	plugins := pluginhost.New(cfg.PluginDir)
+	defer plugins.Stop()
+	if err := plugins.Register(registry); err != nil {
+		log.Printf("load plugins: %v", err)
+	}
 	configRegistry := confignode.NewRegistry()
 	configRegistry.Register(gitbranches.New())
 	configRegistry.Register(script.New())
@@ -51,6 +58,7 @@ func main() {
 
 	cleaner := cleanup.New(database, cfg.WorkspaceDir, cfg.RetainRunsPerTask)
 	cleaner.Start(context.Background())
+	scheduler.New(database, runner).Start(context.Background())
 
 	router := api.NewRouter(database, registry, configRegistry, runner, hub, cfg)
 	go func() {

@@ -22,6 +22,7 @@ import (
 	processnode "puppet/internal/nodes/process"
 	"puppet/internal/nodes/shell"
 	"puppet/internal/nodes/sleep"
+	"puppet/internal/pluginhost"
 
 	"github.com/gin-gonic/gin"
 )
@@ -31,6 +32,7 @@ type runtimeConfig struct {
 	serverURL    string
 	token        string
 	workspaceDir string
+	pluginDir    string
 	registry     *node.Registry
 }
 
@@ -42,11 +44,15 @@ func main() {
 	flag.StringVar(&cfg.serverURL, "server", getenv("PUPPET_SERVER_URL", "http://localhost:8080"), "server base URL")
 	flag.StringVar(&cfg.token, "token", os.Getenv("PUPPET_AGENT_TOKEN"), "agent token")
 	flag.StringVar(&cfg.workspaceDir, "workspace", getenv("PUPPET_AGENT_WORKSPACE_DIR", "agent-workspaces"), "agent workspace dir")
+	flag.StringVar(&cfg.pluginDir, "plugins", getenv("PUPPET_AGENT_PLUGIN_DIR", "agent-plugins"), "agent plugin dir")
 	flag.Parse()
 	if cfg.token == "" {
 		log.Fatal("agent token is required")
 	}
 	if err := os.MkdirAll(cfg.workspaceDir, 0o755); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.MkdirAll(cfg.pluginDir, 0o755); err != nil {
 		log.Fatal(err)
 	}
 	cfg.registry = node.NewRegistry()
@@ -58,6 +64,11 @@ func main() {
 	cfg.registry.Register(processnode.NewStop())
 	cfg.registry.Register(archivenode.NewCompress())
 	cfg.registry.Register(archivenode.NewExtract())
+	plugins := pluginhost.New(cfg.pluginDir)
+	defer plugins.Stop()
+	if err := plugins.Register(cfg.registry); err != nil {
+		log.Printf("load plugins: %v", err)
+	}
 
 	go heartbeatLoop(cfg)
 

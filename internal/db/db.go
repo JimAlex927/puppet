@@ -26,6 +26,9 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 	if err := os.MkdirAll(cfg.SharedFilesDir, 0o755); err != nil {
 		return nil, err
 	}
+	if err := os.MkdirAll(cfg.PluginDir, 0o755); err != nil {
+		return nil, err
+	}
 
 	database, err := gorm.Open(sqlite.Open(cfg.DatabaseDSN), &gorm.Config{})
 	if err != nil {
@@ -34,6 +37,7 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 	if err := database.AutoMigrate(
 		&model.Project{},
 		&model.Task{},
+		&model.TaskSchedule{},
 		&model.TaskRun{},
 		&model.NodeRun{},
 		&model.RunLog{},

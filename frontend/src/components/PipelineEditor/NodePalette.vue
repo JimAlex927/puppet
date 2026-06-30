@@ -32,6 +32,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   control: '控制',
   file: '文件',
   network: '网络',
+  plugin: '插件',
   process: '进程',
 }
 

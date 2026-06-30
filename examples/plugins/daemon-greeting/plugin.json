@@ -1,0 +1,26 @@
+{
+  "id": "example.daemon-greeting",
+  "name": "Daemon Greeting",
+  "version": "0.1.0",
+  "runtime": "daemon",
+  "entry": "pwsh",
+  "args": ["-NoLogo", "-NoProfile", "-File", "plugin.ps1"],
+  "nodes": [
+    {
+      "type": "plugin.daemonGreeting",
+      "name": "Daemon Greeting",
+      "category": "plugin",
+      "description": "Generate a greeting from a daemon plugin.",
+      "supportedOS": ["linux", "darwin", "windows"],
+      "fields": [
+        {
+          "name": "name",
+          "label": "Name",
+          "type": "input",
+          "required": true,
+          "default": "Puppet"
+        }
+      ]
+    }
+  ]
+}

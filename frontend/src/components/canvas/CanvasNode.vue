@@ -101,6 +101,7 @@ const CATEGORY: Record<string, { color: string; icon: unknown }> = {
   http:    { color: '#6366f1', icon: Connection },
   sleep:   { color: '#94a3b8', icon: Clock },
   file:    { color: '#22c55e', icon: Files },
+  plugin:  { color: '#a855f7', icon: Operation },
   default: { color: '#64748b', icon: Operation },
 }
 

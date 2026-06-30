@@ -84,6 +84,27 @@ func TestTarGzipRoundTripWithoutBaseDir(t *testing.T) {
 	assertFile(t, filepath.Join(workspace, "dest", "nested", "b.txt"), "bravo")
 }
 
+func TestCompressUsesOutputDirAndArchiveName(t *testing.T) {
+	workspace := t.TempDir()
+	mustWriteFile(t, filepath.Join(workspace, "src", "a.txt"), "alpha")
+
+	_, err := NewCompress().Execute(testContext(workspace), map[string]any{
+		"sources":        "src",
+		"outputDir":      "archives",
+		"archiveName":    "selected.zip",
+		"workdir":        "${workspace}",
+		"format":         "auto",
+		"includeBaseDir": true,
+		"overwrite":      true,
+	})
+	if err != nil {
+		t.Fatalf("compress with outputDir/archiveName: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "archives", "selected.zip")); err != nil {
+		t.Fatalf("archive was not created at outputDir/archiveName: %v", err)
+	}
+}
+
 func TestExtractZipRejectsPathTraversal(t *testing.T) {
 	workspace := t.TempDir()
 	archivePath := filepath.Join(workspace, "evil.zip")
@@ -118,6 +139,15 @@ func TestExtractZipRejectsPathTraversal(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(workspace, "evil.txt")); !os.IsNotExist(err) {
 		t.Fatalf("path traversal wrote outside destination, stat err=%v", err)
+	}
+}
+
+func TestCleanPathInputRemovesBidiCharacters(t *testing.T) {
+	const hiddenLeftToRightEmbedding = "\u202a"
+	got := cleanPathInput(hiddenLeftToRightEmbedding + `C:\Users\1\archive.zip`)
+	want := `C:\Users\1\archive.zip`
+	if got != want {
+		t.Fatalf("cleanPathInput mismatch: got %q, want %q", got, want)
 	}
 }
 

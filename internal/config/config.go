@@ -13,6 +13,7 @@ type Config struct {
 	DataDir        string
 	WorkspaceDir   string
 	SharedFilesDir string
+	PluginDir      string
 
 	// Retention: how many completed task runs to keep per task (workspace + logs).
 	// 0 means unlimited. Default 30.
@@ -29,6 +30,7 @@ func Load() Config {
 		DataDir:           dataDir,
 		WorkspaceDir:      getenv("PUPPET_WORKSPACE_DIR", dataDir+"/workspaces"),
 		SharedFilesDir:    getenv("PUPPET_SHARED_FILES_DIR", dataDir+"/shared-files"),
+		PluginDir:         getenv("PUPPET_PLUGIN_DIR", dataDir+"/plugins"),
 		RetainRunsPerTask: getenvInt("PUPPET_RETAIN_RUNS_PER_TASK", 30),
 	}
 }

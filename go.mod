@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/glebarez/sqlite v1.11.0
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/tus/tusd/v2 v2.6.0
 	golang.org/x/crypto v0.31.0
 	golang.org/x/sys v0.28.0

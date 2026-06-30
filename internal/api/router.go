@@ -25,6 +25,7 @@ import (
 	"puppet/internal/node"
 	"puppet/internal/project"
 	"puppet/internal/runfiles"
+	"puppet/internal/schedule"
 	"puppet/internal/sharedfiles"
 	"puppet/internal/task"
 
@@ -45,6 +46,7 @@ type Handler struct {
 	auths          *auth.Service
 	sharedFiles    *sharedfiles.Service
 	runFiles       *runfiles.Service
+	schedules      *schedule.Service
 }
 
 type resolvedRunInput struct {
@@ -95,6 +97,7 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 		auths:          auth.NewService(db),
 		sharedFiles:    sharedFiles,
 		runFiles:       runFiles,
+		schedules:      schedule.NewService(db, runner),
 	}
 
 	// Public webhook endpoint — no auth required, validated by per-task token.
@@ -125,6 +128,13 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 		protected.Use(h.authMiddleware())
 		{
 			protected.GET("/dashboard/summary", h.dashboardSummary)
+
+			protected.GET("/schedules", h.listSchedules)
+			protected.POST("/schedules", h.createSchedule)
+			protected.GET("/schedules/:id", h.getSchedule)
+			protected.PUT("/schedules/:id", h.updateSchedule)
+			protected.DELETE("/schedules/:id", h.deleteSchedule)
+			protected.POST("/schedules/:id/run", h.runScheduleNow)
 
 			protected.GET("/shared-files", h.listSharedFiles)
 			protected.POST("/shared-files/:id/share", h.createSharedFileShare)
@@ -604,6 +614,45 @@ func (h *Handler) updateTask(c *gin.Context) {
 
 func (h *Handler) deleteTask(c *gin.Context) {
 	respond(c, gin.H{"deleted": true}, h.tasks.Delete(paramID(c, "id")))
+}
+
+func (h *Handler) listSchedules(c *gin.Context) {
+	schedules, err := h.schedules.List()
+	respond(c, schedules, err)
+}
+
+func (h *Handler) createSchedule(c *gin.Context) {
+	var req model.TaskSchedule
+	if err := c.ShouldBindJSON(&req); err != nil {
+		fail(c, http.StatusBadRequest, err)
+		return
+	}
+	created, err := h.schedules.Create(req)
+	respond(c, created, err)
+}
+
+func (h *Handler) getSchedule(c *gin.Context) {
+	item, err := h.schedules.Get(paramID(c, "id"))
+	respond(c, item, err)
+}
+
+func (h *Handler) updateSchedule(c *gin.Context) {
+	var req model.TaskSchedule
+	if err := c.ShouldBindJSON(&req); err != nil {
+		fail(c, http.StatusBadRequest, err)
+		return
+	}
+	updated, err := h.schedules.Update(paramID(c, "id"), req)
+	respond(c, updated, err)
+}
+
+func (h *Handler) deleteSchedule(c *gin.Context) {
+	respond(c, gin.H{"deleted": true}, h.schedules.Delete(paramID(c, "id")))
+}
+
+func (h *Handler) runScheduleNow(c *gin.Context) {
+	run, err := h.schedules.RunNow(c.Request.Context(), paramID(c, "id"))
+	respond(c, run, err)
 }
 
 func (h *Handler) getPipeline(c *gin.Context) {
@@ -1174,6 +1223,8 @@ func respond(c *gin.Context, data any, err error) {
 		status := http.StatusInternalServerError
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			status = http.StatusNotFound
+		} else if errors.Is(err, schedule.ErrInvalidCronSchedule) {
+			status = http.StatusBadRequest
 		}
 		fail(c, status, err)
 		return

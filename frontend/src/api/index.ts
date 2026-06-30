@@ -19,6 +19,8 @@ import type {
   SharedFileShare,
   Task,
   TaskRun,
+  TaskSchedule,
+  TaskScheduleInput,
   User,
   UserInput,
 } from '@/types'
@@ -75,6 +77,14 @@ export const api = {
     request<Task>({ url: `/projects/${projectId}/tasks`, method: 'POST', data }),
   updateTask: (id: number, data: Partial<Task>) => request<Task>({ url: `/tasks/${id}`, method: 'PUT', data }),
   deleteTask: (id: number) => request<{ deleted: boolean }>({ url: `/tasks/${id}`, method: 'DELETE' }),
+
+  schedules: () => request<TaskSchedule[]>({ url: '/schedules' }),
+  createSchedule: (data: TaskScheduleInput) =>
+    request<TaskSchedule>({ url: '/schedules', method: 'POST', data }),
+  updateSchedule: (id: number, data: TaskScheduleInput) =>
+    request<TaskSchedule>({ url: `/schedules/${id}`, method: 'PUT', data }),
+  deleteSchedule: (id: number) => request<{ deleted: boolean }>({ url: `/schedules/${id}`, method: 'DELETE' }),
+  runScheduleNow: (id: number) => request<TaskRun>({ url: `/schedules/${id}/run`, method: 'POST' }),
 
   pipeline: (taskId: number) => request<PipelineDefinition>({ url: `/tasks/${taskId}/pipeline` }),
   savePipeline: (taskId: number, data: PipelineDefinition) =>

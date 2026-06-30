@@ -40,6 +40,23 @@ type Task struct {
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
+type TaskSchedule struct {
+	ID               uint       `json:"id" gorm:"primaryKey"`
+	ProjectID        uint       `json:"projectId" gorm:"index;not null"`
+	TaskID           uint       `json:"taskId" gorm:"index;not null"`
+	Name             string     `json:"name" gorm:"not null"`
+	CronExpression   string     `json:"cronExpression" gorm:"not null"`
+	CronTimezone     string     `json:"cronTimezone"`
+	Enabled          bool       `json:"enabled" gorm:"index"`
+	InputJSON        string     `json:"inputJson" gorm:"type:text"`
+	NextRunAt        *time.Time `json:"nextRunAt" gorm:"index"`
+	LastRunAt        *time.Time `json:"lastRunAt"`
+	LastRunID        uint       `json:"lastRunId" gorm:"index"`
+	LastErrorMessage string     `json:"lastErrorMessage" gorm:"type:text"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	UpdatedAt        time.Time  `json:"updatedAt"`
+}
+
 type TaskRun struct {
 	ID                   uint       `json:"id" gorm:"primaryKey"`
 	ProjectID            uint       `json:"projectId" gorm:"index;not null"`

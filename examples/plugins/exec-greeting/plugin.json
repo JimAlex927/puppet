@@ -1,0 +1,26 @@
+{
+  "id": "example.exec-greeting",
+  "name": "Exec Greeting",
+  "version": "0.1.0",
+  "runtime": "exec",
+  "entry": "pwsh",
+  "args": ["-NoLogo", "-NoProfile", "-File", "plugin.ps1"],
+  "nodes": [
+    {
+      "type": "plugin.execGreeting",
+      "name": "Exec Greeting",
+      "category": "plugin",
+      "description": "Generate a greeting from an exec plugin.",
+      "supportedOS": ["linux", "darwin", "windows"],
+      "fields": [
+        {
+          "name": "name",
+          "label": "Name",
+          "type": "input",
+          "required": true,
+          "default": "Puppet"
+        }
+      ]
+    }
+  ]
+}

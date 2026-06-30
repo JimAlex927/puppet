@@ -33,6 +33,36 @@ export interface Task {
   updatedAt: string
 }
 
+export interface TaskSchedule {
+  id: number
+  projectId: number
+  taskId: number
+  name: string
+  cronExpression: string
+  cronTimezone: string
+  enabled: boolean
+  inputJson: string
+  nextRunAt?: string | null
+  lastRunAt?: string | null
+  lastRunId: number
+  lastErrorMessage: string
+  projectName: string
+  taskName: string
+  lastStatus: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TaskScheduleInput {
+  projectId: number
+  taskId: number
+  name: string
+  cronExpression: string
+  cronTimezone: string
+  enabled: boolean
+  inputJson: string
+}
+
 export interface TaskRun {
   id: number
   projectId: number

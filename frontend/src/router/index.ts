@@ -7,6 +7,7 @@ const router = createRouter({
     { path: '/login', component: () => import('@/pages/login/LoginPage.vue'), meta: { title: 'Login', public: true } },
     { path: '/dashboard', component: () => import('@/pages/dashboard/DashboardPage.vue'), meta: { title: 'Dashboard' } },
     { path: '/shared-files', component: () => import('@/pages/shared-files/SharedFilesPage.vue'), meta: { title: 'Shared Files' } },
+    { path: '/schedules', component: () => import('@/pages/schedules/SchedulesPage.vue'), meta: { title: 'Schedules' } },
     { path: '/projects', component: () => import('@/pages/projects/ProjectsPage.vue'), meta: { title: 'Projects' } },
     {
       path: '/projects/:id',

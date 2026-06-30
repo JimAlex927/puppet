@@ -42,7 +42,6 @@
           </div>
 
           <div v-if="item.task.description" class="tc-desc">{{ item.task.description }}</div>
-
           <!-- Last run info -->
           <div v-if="item.lastRun" class="tc-run">
             <StatusBadge :status="item.lastRun.status" size="small" />
@@ -190,7 +189,12 @@ function onPageSizeChange() {
 
 function resetForm() {
   editId.value = null
-  Object.assign(form, { name: '', description: '', timeoutSeconds: 600, allowConcurrent: false })
+  Object.assign(form, {
+    name: '',
+    description: '',
+    timeoutSeconds: 600,
+    allowConcurrent: false,
+  })
 }
 
 function openCreate() { resetForm(); dialogVisible.value = true }

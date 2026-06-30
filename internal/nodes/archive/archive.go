@@ -33,7 +33,8 @@ func (e *CompressExecutor) Metadata() node.NodeMetadata {
 		SupportedOS: []string{"linux", "darwin", "windows"},
 		Fields: []node.NodeField{
 			{Name: "sources", Label: "Source Paths", Type: "textarea", Required: true},
-			{Name: "outputPath", Label: "Output Archive", Type: "input", Required: true, Default: "${workspace}/archive.zip"},
+			{Name: "outputDir", Label: "Output Dir", Type: "input", Required: true, Default: "${workspace}"},
+			{Name: "archiveName", Label: "Archive Name", Type: "input", Required: true, Default: "archive.zip"},
 			{Name: "workdir", Label: "Workdir", Type: "input", Required: false, Default: "${workspace}"},
 			{Name: "format", Label: "Format", Type: "select", Required: true, Default: "auto", Options: []string{"auto", "zip", "tar", "tar.gz", "tgz", "gzip"}},
 			{Name: "includeBaseDir", Label: "Include Base Dir", Type: "switch", Required: false, Default: true},
@@ -64,23 +65,34 @@ func (e *CompressExecutor) Validate(params map[string]any) error {
 	if len(pathsFrom(params["sources"])) == 0 {
 		return fmt.Errorf("sources is required")
 	}
-	if strings.TrimSpace(stringFrom(params["outputPath"])) == "" {
-		return fmt.Errorf("outputPath is required")
+	outputPath := cleanPathInput(stringFrom(params["outputPath"]))
+	archiveName := cleanPathInput(stringFrom(params["archiveName"]))
+	if archiveName == "" && outputPath == "" {
+		return fmt.Errorf("archiveName is required")
 	}
-	if _, err := normalizeCompressFormat(stringFrom(params["format"]), stringFrom(params["outputPath"])); err != nil {
+	if archiveName != "" {
+		if err := validateArchiveName(archiveName); err != nil {
+			return err
+		}
+	}
+	formatSource := outputPath
+	if archiveName != "" {
+		formatSource = archiveName
+	}
+	if _, err := normalizeCompressFormat(stringFrom(params["format"]), formatSource); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (e *ExtractExecutor) Validate(params map[string]any) error {
-	if strings.TrimSpace(stringFrom(params["archivePath"])) == "" {
+	if cleanPathInput(stringFrom(params["archivePath"])) == "" {
 		return fmt.Errorf("archivePath is required")
 	}
-	if strings.TrimSpace(stringFrom(params["destDir"])) == "" {
+	if cleanPathInput(stringFrom(params["destDir"])) == "" {
 		return fmt.Errorf("destDir is required")
 	}
-	if _, err := normalizeExtractFormat(stringFrom(params["format"]), stringFrom(params["archivePath"])); err != nil {
+	if _, err := normalizeExtractFormat(stringFrom(params["format"]), cleanPathInput(stringFrom(params["archivePath"]))); err != nil {
 		return err
 	}
 	return nil
@@ -94,7 +106,7 @@ func (e *CompressExecutor) Execute(ctx *node.NodeContext, params map[string]any)
 	if err != nil {
 		return nil, err
 	}
-	outputPath, err := resolvePath(workspace, workdir, stringFrom(params["outputPath"]))
+	outputPath, err := resolveCompressOutputPath(workspace, workdir, params)
 	if err != nil {
 		return nil, err
 	}
@@ -608,7 +620,7 @@ func workdirFrom(workspace string, value any) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	workdir := strings.TrimSpace(stringFrom(value))
+	workdir := cleanPathInput(stringFrom(value))
 	if workdir == "" {
 		workdir = absWorkspace
 	}
@@ -620,7 +632,7 @@ func workdirFrom(workspace string, value any) (string, string, error) {
 }
 
 func resolvePath(workspace, workdir, value string) (string, error) {
-	value = strings.TrimSpace(strings.ReplaceAll(value, "${workspace}", workspace))
+	value = cleanPathInput(strings.ReplaceAll(value, "${workspace}", workspace))
 	if value == "" {
 		return "", fmt.Errorf("path is required")
 	}
@@ -628,6 +640,47 @@ func resolvePath(workspace, workdir, value string) (string, error) {
 		return filepath.Clean(value), nil
 	}
 	return filepath.Clean(filepath.Join(workdir, value)), nil
+}
+
+func resolveCompressOutputPath(workspace, workdir string, params map[string]any) (string, error) {
+	archiveName := cleanPathInput(stringFrom(params["archiveName"]))
+	if archiveName == "" {
+		return resolvePath(workspace, workdir, stringFrom(params["outputPath"]))
+	}
+	if err := validateArchiveName(archiveName); err != nil {
+		return "", err
+	}
+	outputDir := cleanPathInput(stringFrom(params["outputDir"]))
+	if outputDir == "" {
+		outputDir = "${workspace}"
+	}
+	dir, err := resolvePath(workspace, workdir, outputDir)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, archiveName), nil
+}
+
+func validateArchiveName(name string) error {
+	if name == "" {
+		return fmt.Errorf("archiveName is required")
+	}
+	if filepath.IsAbs(name) || strings.ContainsAny(name, `/\`) || name == "." || name == ".." {
+		return fmt.Errorf("archiveName must be a file name, not a path")
+	}
+	return nil
+}
+
+func cleanPathInput(value string) string {
+	value = strings.Map(func(r rune) rune {
+		switch r {
+		case '\u202A', '\u202B', '\u202C', '\u202D', '\u202E', '\u2066', '\u2067', '\u2068', '\u2069', '\uFEFF':
+			return -1
+		default:
+			return r
+		}
+	}, value)
+	return strings.Trim(strings.TrimSpace(value), `"'`)
 }
 
 func normalizeCompressFormat(format, outputPath string) (string, error) {
@@ -683,12 +736,12 @@ func formatFromPath(filePath string) string {
 }
 
 func pathsFrom(value any) []string {
-	raw := stringFrom(value)
+	raw := cleanPathInput(stringFrom(value))
 	raw = strings.ReplaceAll(raw, "\r\n", "\n")
 	raw = strings.ReplaceAll(raw, ",", "\n")
 	var items []string
 	for _, line := range strings.Split(raw, "\n") {
-		line = strings.TrimSpace(line)
+		line = cleanPathInput(line)
 		if line != "" {
 			items = append(items, line)
 		}
