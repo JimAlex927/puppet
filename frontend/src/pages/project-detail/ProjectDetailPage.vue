@@ -35,6 +35,7 @@
                   <el-dropdown-item :icon="Operation" @click="$router.push(`/tasks/${item.task.id}/pipeline`)">编辑 Pipeline</el-dropdown-item>
                   <el-dropdown-item :icon="Clock" @click="$router.push(`/tasks/${item.task.id}/runs`)">执行记录</el-dropdown-item>
                   <el-dropdown-item :icon="EditPen" @click="openEdit(item.task)">编辑设置</el-dropdown-item>
+                  <el-dropdown-item :icon="CopyDocument" @click="forkTask(item.task)">Fork</el-dropdown-item>
                   <el-dropdown-item divided style="color: #ef4444" :icon="Delete" @click="remove(item.task.id)">删除</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -113,7 +114,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Clock, Delete, EditPen, MoreFilled, Operation, Plus, VideoPlay } from '@element-plus/icons-vue'
+import { Clock, CopyDocument, Delete, EditPen, MoreFilled, Operation, Plus, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@/api'
 import RunTaskDialog from '@/components/RunTaskDialog.vue'
@@ -234,6 +235,26 @@ async function save() {
 function run(taskId: number) { runDialog.value?.open(taskId) }
 
 function onRunSuccess(run: TaskRun) { router.push(`/runs/${run.id}`) }
+
+async function forkTask(task: Task) {
+  const { value } = await ElMessageBox.prompt('请输入 Fork 后的新 Task 名称', 'Fork Task', {
+    inputValue: `${task.name} copy`,
+    inputPlaceholder: '新 Task 名称',
+    inputValidator: (val) => Boolean(String(val || '').trim()) || '请填写 Task 名称',
+    confirmButtonText: '创建',
+    cancelButtonText: '取消',
+  })
+  const created = await api.createTask(projectId, {
+    name: String(value).trim(),
+    description: task.description,
+    pipelineJson: task.pipelineJson,
+    allowConcurrent: task.allowConcurrent,
+    timeoutSeconds: task.timeoutSeconds,
+  })
+  ElMessage.success('已 Fork 新 Task')
+  await load()
+  router.push(`/tasks/${created.id}/pipeline`)
+}
 
 async function remove(taskId: number) {
   await ElMessageBox.confirm('确认删除该任务？此操作不可撤销。', '删除任务', { type: 'warning' })

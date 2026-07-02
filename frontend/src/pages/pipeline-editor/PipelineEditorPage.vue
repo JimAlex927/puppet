@@ -487,12 +487,17 @@ function runHistoryVersion(version: PipelineVersion) {
 }
 
 async function createTaskFromHistoryVersion(version: PipelineVersion) {
-  await ElMessageBox.confirm(`确认根据 Run #${version.taskRunId} 的 Pipeline 生成一个新 Task？`, '生成新 Task', {
-    type: 'info',
+  const defaultName = `${task.value?.name || 'Task'} copy from run #${version.taskRunId}`
+  const { value } = await ElMessageBox.prompt('请输入新 Task 名称', '生成新 Task', {
+    inputValue: defaultName,
+    inputPlaceholder: '新 Task 名称',
+    inputValidator: (val) => Boolean(String(val || '').trim()) || '请填写 Task 名称',
+    confirmButtonText: '创建',
+    cancelButtonText: '取消',
   })
   creatingTaskFromHistory.value = true
   try {
-    const created = await api.createTaskFromPipelineVersion(taskId, version.taskRunId)
+    const created = await api.createTaskFromPipelineVersion(taskId, version.taskRunId, String(value).trim())
     ElMessage.success('已生成新 Task')
     router.push(`/tasks/${created.id}/pipeline`)
   } finally {

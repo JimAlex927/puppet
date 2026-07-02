@@ -51,6 +51,13 @@
       >
         运行文件
       </button>
+      <button
+        class="run-tab"
+        :class="{ 'run-tab--active': activeTab === 'history' }"
+        @click="activeTab = 'history'"
+      >
+        历史版本
+      </button>
     </div>
 
     <!-- ── Main: DAG + Log ────────────────────────────────── -->
@@ -248,34 +255,75 @@
         </el-table-column>
       </el-table>
     </div>
+
+    <div v-else-if="run && activeTab === 'history'" class="run-history">
+      <div class="rh-header">
+        <div>
+          <div class="rh-title">Run #{{ run.id }} Pipeline Snapshot</div>
+          <div class="rh-sub">
+            {{ run.triggeredBy || 'system' }} · {{ run.triggerType || 'manual' }} · {{ fmtDate(run.createdAt) }}
+          </div>
+        </div>
+        <el-space>
+          <StatusBadge :status="run.status" size="small" />
+          <el-button size="small" :icon="VideoPlay" @click="runThisHistoryVersion">
+            用此版本运行
+          </el-button>
+          <el-button
+            size="small"
+            type="primary"
+            :icon="CopyDocument"
+            :loading="creatingTaskFromHistory"
+            @click="createTaskFromThisHistory"
+          >
+            生成新 Task
+          </el-button>
+        </el-space>
+      </div>
+
+      <div class="rh-summary">
+        <div><span>Task ID</span><strong>#{{ run.taskId }}</strong></div>
+        <div><span>Run ID</span><strong>#{{ run.id }}</strong></div>
+        <div><span>节点数</span><strong>{{ pipelineSnapshot?.nodes.length ?? 0 }}</strong></div>
+        <div><span>运行参数</span><strong>{{ pipelineSnapshot?.inputs.length ?? 0 }}</strong></div>
+      </div>
+
+      <pre class="rh-json">{{ prettyJSON(pipelineSnapshot ?? parseJSONRecord(run.pipelineSnapshotJson)) }}</pre>
+    </div>
+
+    <RunTaskDialog ref="runDialog" @success="onRunSuccess" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { ArrowUp, Back, Document, Download, Folder, Refresh } from '@element-plus/icons-vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowUp, Back, CopyDocument, Document, Download, Folder, Refresh, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@/api'
 import RunDAG from '@/components/run/RunDAG.vue'
+import RunTaskDialog from '@/components/RunTaskDialog.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import type { NodeRun, PipelineDefinition, RunLog, TaskRun, TaskRunFileBundle, TaskRunFileEntry, TaskRunFileList } from '@/types'
 import { fmtDate, fmtDuration } from '@/utils/format'
 
 const route = useRoute()
+const router = useRouter()
 const runId = Number(route.params.id)
 
 const run = ref<TaskRun>()
 const nodeRuns = ref<NodeRun[]>([])
 const logs = ref<RunLog[]>([])
 const selectedNodeRunId = ref<number | null>(null)
-const activeTab = ref<'execution' | 'files'>('execution')
+const activeTab = ref<'execution' | 'files' | 'history'>('execution')
 const fileList = ref<TaskRunFileList>()
 const filePath = ref('')
 const fileLoading = ref(false)
 const selectedFilePaths = ref<string[]>([])
 const fileBundles = ref<TaskRunFileBundle[]>([])
+const creatingTaskFromHistory = ref(false)
 const logViewer = ref<HTMLElement>()
+const runDialog = ref<InstanceType<typeof RunTaskDialog>>()
 let sse: EventSource | undefined
 let transientId = -1
 
@@ -448,6 +496,37 @@ function fmtFileSize(size: number) {
   }
   const digits = value >= 10 || unit === 0 ? 0 : 1
   return `${value.toFixed(digits)} ${units[unit]}`
+}
+
+function runThisHistoryVersion() {
+  if (!run.value) return
+  runDialog.value?.open(run.value.taskId, {
+    pipelineVersionId: run.value.id,
+    title: `运行任务 - Run #${run.value.id} 版本`,
+  })
+}
+
+async function createTaskFromThisHistory() {
+  if (!run.value) return
+  const { value } = await ElMessageBox.prompt('请输入新 Task 名称', '生成新 Task', {
+    inputValue: `Task copy from run #${run.value.id}`,
+    inputPlaceholder: '新 Task 名称',
+    inputValidator: (val) => Boolean(String(val || '').trim()) || '请填写 Task 名称',
+    confirmButtonText: '创建',
+    cancelButtonText: '取消',
+  })
+  creatingTaskFromHistory.value = true
+  try {
+    const created = await api.createTaskFromPipelineVersion(run.value.taskId, run.value.id, String(value).trim())
+    ElMessage.success('已生成新 Task')
+    router.push(`/tasks/${created.id}/pipeline`)
+  } finally {
+    creatingTaskFromHistory.value = false
+  }
+}
+
+function onRunSuccess(nextRun: TaskRun) {
+  router.push(`/runs/${nextRun.id}`)
 }
 
 // Auto-scroll logs
@@ -756,6 +835,101 @@ onBeforeUnmount(() => sse?.close())
   --el-table-row-hover-bg-color: #1e1f2e;
   --el-fill-color-lighter: #1e1f2e;
   --el-text-color-regular: #c4cad4;
+}
+
+.run-history {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 14px 16px;
+  background: #1a1b23;
+  overflow: hidden;
+}
+
+.rh-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #2d2e3d;
+  border-radius: 6px;
+  background: #111827;
+}
+
+.rh-title {
+  color: #e2e8f0;
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.rh-sub {
+  margin-top: 4px;
+  color: #8892a4;
+  font-size: 12px;
+}
+
+.rh-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
+.rh-summary div {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #2d2e3d;
+  border-radius: 6px;
+  background: #111827;
+}
+
+.rh-summary span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  margin-bottom: 3px;
+}
+
+.rh-summary strong {
+  display: block;
+  color: #c4cad4;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rh-json {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #bfdbfe;
+  background: #0c1220;
+  border: 1px solid #1e2a3d;
+  border-radius: 6px;
+  padding: 12px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+:deep(.run-history .el-button:not(.el-button--primary):not(.el-button--success)) {
+  background: #252633;
+  border-color: #3a3b4e;
+  color: #c4cad4;
+}
+
+:deep(.run-history .el-button:not(.el-button--primary):not(.el-button--success):hover) {
+  background: #2d2e3d;
+  color: #e2e8f0;
 }
 
 /* DAG panel */
