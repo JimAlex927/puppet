@@ -152,11 +152,11 @@
             @click="selectHistory(version)"
           >
             <div class="history-main">
-              <span class="history-version">v{{ version.version }}</span>
+              <span class="history-version">Run #{{ version.taskRunId }}</span>
               <span class="history-message">{{ historyMessage(version.message) }}</span>
             </div>
             <div class="history-meta">
-              <span>{{ version.createdBy || 'system' }}</span>
+              <span>{{ version.createdBy || 'system' }} · {{ version.triggerType || 'manual' }}</span>
               <span>{{ fmtDate(version.createdAt) }}</span>
             </div>
           </button>
@@ -166,18 +166,24 @@
         <div v-if="selectedHistory" class="history-detail">
           <div class="history-detail-head">
             <div>
-              <strong>v{{ selectedHistory.version }}</strong>
+              <strong>Run #{{ selectedHistory.taskRunId }}</strong>
               <span>{{ selectedHistorySummary }}</span>
             </div>
-            <el-button
-              size="small"
-              type="primary"
-              :icon="RefreshLeft"
-              :loading="restoringHistory"
-              @click="restoreHistoryVersion(selectedHistory)"
-            >
-              恢复此版本
-            </el-button>
+            <el-space>
+              <StatusBadge :status="selectedHistory.status" size="small" />
+              <el-button size="small" :icon="VideoPlay" @click="runHistoryVersion(selectedHistory)">
+                用此版本运行
+              </el-button>
+              <el-button
+                size="small"
+                type="primary"
+                :icon="CopyDocument"
+                :loading="creatingTaskFromHistory"
+                @click="createTaskFromHistoryVersion(selectedHistory)"
+              >
+                生成新 Task
+              </el-button>
+            </el-space>
           </div>
           <pre>{{ prettyHistoryJSON(selectedHistory.pipelineJson) }}</pre>
         </div>
@@ -291,20 +297,23 @@
         <el-button type="primary" @click="saveInput">确定</el-button>
       </template>
     </el-dialog>
+    <RunTaskDialog ref="runDialog" @success="onRunSuccess" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Back, Clock, Delete, DocumentChecked, EditPen, Plus, RefreshLeft, Setting } from '@element-plus/icons-vue'
+import { Back, Clock, CopyDocument, Delete, DocumentChecked, EditPen, Plus, RefreshLeft, Setting, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@/api'
 import { usePipelineEditor } from '@/composables/usePipelineEditor'
 import NodePalette from '@/components/canvas/NodePalette.vue'
 import PipelineCanvas from '@/components/canvas/PipelineCanvas.vue'
 import NodeConfigDrawer from '@/components/canvas/NodeConfigDrawer.vue'
-import type { NodeMetadata, PipelineDefinition, PipelineInput, PipelineVersion } from '@/types'
+import RunTaskDialog from '@/components/RunTaskDialog.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
+import type { NodeMetadata, PipelineDefinition, PipelineInput, PipelineVersion, TaskRun } from '@/types'
 import { fmtDate } from '@/utils/format'
 
 const route = useRoute()
@@ -322,10 +331,11 @@ const {
 } = usePipelineEditor(taskId)
 
 const canvasRef = ref<InstanceType<typeof PipelineCanvas>>()
+const runDialog = ref<InstanceType<typeof RunTaskDialog>>()
 const settingsVisible = ref(false)
 const historyVisible = ref(false)
 const historyLoading = ref(false)
-const restoringHistory = ref(false)
+const creatingTaskFromHistory = ref(false)
 const historyVersions = ref<PipelineVersion[]>([])
 const selectedHistory = ref<PipelineVersion>()
 
@@ -469,30 +479,29 @@ async function selectHistory(version: PipelineVersion) {
   selectedHistory.value = await api.pipelineVersion(taskId, version.id)
 }
 
-async function restoreHistoryVersion(version: PipelineVersion) {
-  await ElMessageBox.confirm(`确认恢复到 Pipeline v${version.version}？当前 Pipeline 会作为新的历史版本保留。`, '恢复版本', {
-    type: 'warning',
+function runHistoryVersion(version: PipelineVersion) {
+  runDialog.value?.open(taskId, {
+    pipelineVersionId: version.taskRunId,
+    title: `运行任务 - Run #${version.taskRunId} 版本`,
   })
-  restoringHistory.value = true
+}
+
+async function createTaskFromHistoryVersion(version: PipelineVersion) {
+  await ElMessageBox.confirm(`确认根据 Run #${version.taskRunId} 的 Pipeline 生成一个新 Task？`, '生成新 Task', {
+    type: 'info',
+  })
+  creatingTaskFromHistory.value = true
   try {
-    const restored = await api.restorePipelineVersion(taskId, version.id)
-    pipeline.value = restored.pipeline
-    await nextTick()
-    const { nodes, edges } = buildFlowElements()
-    canvasRef.value?.initCanvas(nodes, edges)
-    await loadHistory()
-    selectedHistory.value = restored.version
-    ElMessage.success(`已恢复为 v${version.version}`)
+    const created = await api.createTaskFromPipelineVersion(taskId, version.taskRunId)
+    ElMessage.success('已生成新 Task')
+    router.push(`/tasks/${created.id}/pipeline`)
   } finally {
-    restoringHistory.value = false
+    creatingTaskFromHistory.value = false
   }
 }
 
 function historyMessage(message: string) {
-  if (message === 'initial') return '初始版本'
-  if (message === 'save') return '保存'
-  if (message.startsWith('restore ')) return message.replace('restore', '恢复')
-  return message || '保存'
+  return message || '运行版本'
 }
 
 function prettyHistoryJSON(content: string) {
@@ -543,6 +552,10 @@ async function onSave() {
 function goBack() {
   if (task.value) router.push(`/projects/${task.value.projectId}`)
   else router.back()
+}
+
+function onRunSuccess(run: TaskRun) {
+  router.push(`/runs/${run.id}`)
 }
 
 onMounted(load)

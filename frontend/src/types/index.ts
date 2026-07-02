@@ -290,10 +290,13 @@ export interface PipelineDefinition {
 export interface PipelineVersion {
   id: number
   taskId: number
+  taskRunId: number
   version: number
   pipelineJson: string
   createdBy: string
   message: string
+  status: Status
+  triggerType: string
   createdAt: string
 }
 

@@ -43,10 +43,13 @@ type Task struct {
 type PipelineVersion struct {
 	ID           uint      `json:"id" gorm:"primaryKey"`
 	TaskID       uint      `json:"taskId" gorm:"uniqueIndex:idx_pipeline_version_task_version;index;not null"`
+	TaskRunID    uint      `json:"taskRunId" gorm:"index"`
 	Version      int       `json:"version" gorm:"uniqueIndex:idx_pipeline_version_task_version;not null"`
 	PipelineJSON string    `json:"pipelineJson" gorm:"type:text;not null"`
 	CreatedBy    string    `json:"createdBy"`
 	Message      string    `json:"message"`
+	Status       string    `json:"status" gorm:"-"`
+	TriggerType  string    `json:"triggerType" gorm:"-"`
 	CreatedAt    time.Time `json:"createdAt"`
 }
 

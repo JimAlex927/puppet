@@ -167,7 +167,7 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 			protected.PUT("/tasks/:id/pipeline", h.updatePipeline)
 			protected.GET("/tasks/:id/pipeline/versions", h.listPipelineVersions)
 			protected.GET("/tasks/:id/pipeline/versions/:versionID", h.getPipelineVersion)
-			protected.POST("/tasks/:id/pipeline/versions/:versionID/restore", h.restorePipelineVersion)
+			protected.POST("/tasks/:id/pipeline/versions/:versionID/task", h.createTaskFromPipelineVersion)
 			protected.GET("/node-types", h.nodeTypes)
 			protected.GET("/config-node-types", h.configNodeTypes)
 			protected.GET("/tasks/:id/run-config", h.getRunConfig)
@@ -721,13 +721,13 @@ func (h *Handler) getPipelineVersion(c *gin.Context) {
 	respond(c, version, err)
 }
 
-func (h *Handler) restorePipelineVersion(c *gin.Context) {
-	pipeline, version, err := h.tasks.RestorePipelineVersion(paramID(c, "id"), paramID(c, "versionID"), currentUsername(c))
-	if err != nil {
-		respond(c, nil, err)
-		return
+func (h *Handler) createTaskFromPipelineVersion(c *gin.Context) {
+	var req struct {
+		Name string `json:"name"`
 	}
-	ok(c, gin.H{"pipeline": pipeline, "version": version})
+	_ = c.ShouldBindJSON(&req)
+	created, err := h.tasks.CreateFromPipelineVersion(paramID(c, "id"), paramID(c, "versionID"), strings.TrimSpace(req.Name))
+	respond(c, created, err)
 }
 
 func (h *Handler) nodeTypes(c *gin.Context) {
@@ -739,7 +739,8 @@ func (h *Handler) configNodeTypes(c *gin.Context) {
 }
 
 func (h *Handler) getRunConfig(c *gin.Context) {
-	pipeline, err := h.tasks.Pipeline(paramID(c, "id"))
+	versionID, _ := strconv.ParseUint(c.Query("pipelineVersionId"), 10, 64)
+	pipeline, _, err := h.pipelineForRunRequest(paramID(c, "id"), uint(versionID))
 	if err != nil {
 		respond(c, nil, err)
 		return
@@ -750,6 +751,29 @@ func (h *Handler) getRunConfig(c *gin.Context) {
 		return
 	}
 	ok(c, gin.H{"inputs": resolved})
+}
+
+func (h *Handler) pipelineForRunRequest(taskID uint, pipelineVersionID uint) (node.PipelineDefinition, string, error) {
+	if pipelineVersionID == 0 {
+		task, err := h.tasks.Get(taskID)
+		if err != nil {
+			return node.PipelineDefinition{}, "", err
+		}
+		var pipeline node.PipelineDefinition
+		if err := json.Unmarshal([]byte(task.PipelineJSON), &pipeline); err != nil {
+			return node.PipelineDefinition{}, "", err
+		}
+		return pipeline, task.PipelineJSON, nil
+	}
+	version, err := h.tasks.PipelineVersion(taskID, pipelineVersionID)
+	if err != nil {
+		return node.PipelineDefinition{}, "", err
+	}
+	var pipeline node.PipelineDefinition
+	if err := json.Unmarshal([]byte(version.PipelineJSON), &pipeline); err != nil {
+		return node.PipelineDefinition{}, "", err
+	}
+	return pipeline, version.PipelineJSON, nil
 }
 
 func (h *Handler) generateWebhookToken(c *gin.Context) {
@@ -821,10 +845,12 @@ func generateToken() (string, error) {
 
 func (h *Handler) runTask(c *gin.Context) {
 	var req struct {
-		Input map[string]any `json:"input"`
+		Input             map[string]any `json:"input"`
+		PipelineVersionID uint           `json:"pipelineVersionId"`
 	}
 	_ = c.ShouldBindJSON(&req)
-	pipeline, err := h.tasks.Pipeline(paramID(c, "id"))
+	taskID := paramID(c, "id")
+	pipeline, snapshot, err := h.pipelineForRunRequest(taskID, req.PipelineVersionID)
 	if err != nil {
 		respond(c, nil, err)
 		return
@@ -840,17 +866,18 @@ func (h *Handler) runTask(c *gin.Context) {
 			triggeredBy = user.Username
 		}
 	}
-	run, err := h.engine.StartTask(c.Request.Context(), paramID(c, "id"), "manual", triggeredBy, input)
+	run, err := h.engine.StartTaskWithPipelineSnapshot(c.Request.Context(), taskID, "manual", triggeredBy, input, snapshot)
 	respond(c, run, err)
 }
 
 func (h *Handler) prepareTaskRun(c *gin.Context) {
 	var req struct {
-		Input map[string]any `json:"input"`
+		Input             map[string]any `json:"input"`
+		PipelineVersionID uint           `json:"pipelineVersionId"`
 	}
 	_ = c.ShouldBindJSON(&req)
 	taskID := paramID(c, "id")
-	pipeline, err := h.tasks.Pipeline(taskID)
+	pipeline, snapshot, err := h.pipelineForRunRequest(taskID, req.PipelineVersionID)
 	if err != nil {
 		respond(c, nil, err)
 		return
@@ -866,7 +893,7 @@ func (h *Handler) prepareTaskRun(c *gin.Context) {
 			triggeredBy = user.Username
 		}
 	}
-	run, err := h.engine.PrepareTaskRun(c.Request.Context(), taskID, "manual", triggeredBy, input)
+	run, err := h.engine.PrepareTaskRunWithPipelineSnapshot(c.Request.Context(), taskID, "manual", triggeredBy, input, snapshot)
 	respond(c, run, err)
 }
 

@@ -1,6 +1,7 @@
 package task
 
 import (
+	"strings"
 	"testing"
 
 	"puppet/internal/model"
@@ -10,12 +11,12 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestPipelineVersionsSaveAndRestore(t *testing.T) {
+func TestPipelineVersionsComeFromTaskRuns(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.Task{}, &model.PipelineVersion{}); err != nil {
+	if err := db.AutoMigrate(&model.Task{}, &model.TaskRun{}); err != nil {
 		t.Fatal(err)
 	}
 	service := NewService(db)
@@ -24,44 +25,49 @@ func TestPipelineVersionsSaveAndRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	updatedPipeline := node.PipelineDefinition{
+		Name:          "Edited but not run",
+		AgentSelector: node.AgentSelector{Labels: []string{"local"}},
+		Nodes:         []node.PipelineNode{},
+	}
+	if _, err := service.UpdatePipeline(created.ID, updatedPipeline, "alice"); err != nil {
+		t.Fatal(err)
+	}
 	versions, err := service.PipelineVersions(created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(versions) != 1 || versions[0].Version != 1 || versions[0].Message != "initial" {
-		t.Fatalf("unexpected initial versions: %#v", versions)
+	if len(versions) != 0 {
+		t.Fatalf("saving pipeline should not create versions, got %#v", versions)
 	}
 
-	pipeline := node.PipelineDefinition{
-		Name:          "Deploy v2",
-		AgentSelector: node.AgentSelector{Labels: []string{"local"}},
-		StartNodeID:   "shell-1",
-		Nodes: []node.PipelineNode{{
-			ID:     "shell-1",
-			Name:   "Shell",
-			Type:   "shell",
-			Params: map[string]any{"script": "echo v2"},
-		}},
+	run := model.TaskRun{
+		ProjectID:            created.ProjectID,
+		TaskID:               created.ID,
+		Status:               model.TaskRunSuccess,
+		TriggerType:          "manual",
+		TriggeredBy:          "alice",
+		PipelineSnapshotJSON: created.PipelineJSON,
 	}
-	if _, err := service.UpdatePipeline(created.ID, pipeline, "alice"); err != nil {
+	if err := db.Create(&run).Error; err != nil {
 		t.Fatal(err)
 	}
 	versions, err = service.PipelineVersions(created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(versions) != 2 || versions[0].Version != 2 || versions[0].CreatedBy != "alice" {
-		t.Fatalf("unexpected saved versions: %#v", versions)
+	if len(versions) != 1 || versions[0].TaskRunID != run.ID || versions[0].Version != int(run.ID) {
+		t.Fatalf("unexpected run versions: %#v", versions)
 	}
 
-	restored, restoreVersion, err := service.RestorePipelineVersion(created.ID, versions[1].ID, "bob")
+	copied, err := service.CreateFromPipelineVersion(created.ID, run.ID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if restored.Name == pipeline.Name {
-		t.Fatalf("expected restore to initial pipeline, got %#v", restored)
+	if copied.PipelineJSON != created.PipelineJSON {
+		t.Fatalf("copied task should use run snapshot")
 	}
-	if restoreVersion.Version != 3 || restoreVersion.Message != "restore v1" || restoreVersion.CreatedBy != "bob" {
-		t.Fatalf("unexpected restore version: %#v", restoreVersion)
+	if !strings.Contains(copied.Name, "run #") {
+		t.Fatalf("unexpected copied task name: %q", copied.Name)
 	}
 }

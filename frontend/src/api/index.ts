@@ -96,19 +96,24 @@ export const api = {
     request<PipelineVersion[]>({ url: `/tasks/${taskId}/pipeline/versions` }),
   pipelineVersion: (taskId: number, versionId: number) =>
     request<PipelineVersion>({ url: `/tasks/${taskId}/pipeline/versions/${versionId}` }),
-  restorePipelineVersion: (taskId: number, versionId: number) =>
-    request<{ pipeline: PipelineDefinition; version: PipelineVersion }>({
-      url: `/tasks/${taskId}/pipeline/versions/${versionId}/restore`,
+  createTaskFromPipelineVersion: (taskId: number, versionId: number, name = '') =>
+    request<Task>({
+      url: `/tasks/${taskId}/pipeline/versions/${versionId}/task`,
       method: 'POST',
+      data: { name },
     }),
   nodeTypes: () => request<NodeMetadata[]>({ url: '/node-types' }),
   sourceTypes: () => request<NodeMetadata[]>({ url: '/config-node-types' }),
-  runConfig: (taskId: number) => request<RunConfig>({ url: `/tasks/${taskId}/run-config` }),
+  runConfig: (taskId: number, pipelineVersionId?: number) =>
+    request<RunConfig>({
+      url: `/tasks/${taskId}/run-config`,
+      params: pipelineVersionId ? { pipelineVersionId } : undefined,
+    }),
 
-  runTask: (taskId: number, input: Record<string, unknown> = {}) =>
-    request<TaskRun>({ url: `/tasks/${taskId}/run`, method: 'POST', data: { input } }),
-  prepareTaskRun: (taskId: number, input: Record<string, unknown> = {}) =>
-    request<TaskRun>({ url: `/tasks/${taskId}/runs/prepare`, method: 'POST', data: { input } }),
+  runTask: (taskId: number, input: Record<string, unknown> = {}, pipelineVersionId?: number) =>
+    request<TaskRun>({ url: `/tasks/${taskId}/run`, method: 'POST', data: { input, pipelineVersionId } }),
+  prepareTaskRun: (taskId: number, input: Record<string, unknown> = {}, pipelineVersionId?: number) =>
+    request<TaskRun>({ url: `/tasks/${taskId}/runs/prepare`, method: 'POST', data: { input, pipelineVersionId } }),
   startTaskRun: (runId: number) => request<TaskRun>({ url: `/task-runs/${runId}/start`, method: 'POST' }),
   taskRuns: (taskId: number) => request<TaskRun[]>({ url: `/tasks/${taskId}/runs` }),
   taskRun: (id: number) => request<TaskRun>({ url: `/task-runs/${id}` }),

@@ -64,6 +64,18 @@ func (e *Engine) StartTask(ctx context.Context, taskID uint, triggerType string,
 }
 
 func (e *Engine) PrepareTaskRun(ctx context.Context, taskID uint, triggerType string, triggeredBy string, input map[string]any) (model.TaskRun, error) {
+	return e.PrepareTaskRunWithPipelineSnapshot(ctx, taskID, triggerType, triggeredBy, input, "")
+}
+
+func (e *Engine) StartTaskWithPipelineSnapshot(ctx context.Context, taskID uint, triggerType string, triggeredBy string, input map[string]any, pipelineSnapshot string) (model.TaskRun, error) {
+	run, err := e.PrepareTaskRunWithPipelineSnapshot(ctx, taskID, triggerType, triggeredBy, input, pipelineSnapshot)
+	if err != nil {
+		return model.TaskRun{}, err
+	}
+	return e.StartPreparedTaskRun(ctx, run.ID)
+}
+
+func (e *Engine) PrepareTaskRunWithPipelineSnapshot(ctx context.Context, taskID uint, triggerType string, triggeredBy string, input map[string]any, pipelineSnapshot string) (model.TaskRun, error) {
 	var task model.Task
 	var run model.TaskRun
 	var pipeline node.PipelineDefinition
@@ -84,7 +96,11 @@ func (e *Engine) PrepareTaskRun(ctx context.Context, taskID uint, triggerType st
 				return fmt.Errorf("task already has a running task run")
 			}
 		}
-		if err := json.Unmarshal([]byte(task.PipelineJSON), &pipeline); err != nil {
+		snapshot := pipelineSnapshot
+		if snapshot == "" {
+			snapshot = task.PipelineJSON
+		}
+		if err := json.Unmarshal([]byte(snapshot), &pipeline); err != nil {
 			return err
 		}
 		run = model.TaskRun{
@@ -94,7 +110,7 @@ func (e *Engine) PrepareTaskRun(ctx context.Context, taskID uint, triggerType st
 			TriggerType:          triggerType,
 			TriggeredBy:          triggeredBy,
 			InputJSON:            string(inputJSON),
-			PipelineSnapshotJSON: task.PipelineJSON,
+			PipelineSnapshotJSON: snapshot,
 		}
 		return tx.Create(&run).Error
 	})

@@ -3,7 +3,6 @@ package task
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"puppet/internal/model"
 	"puppet/internal/node"
@@ -35,12 +34,7 @@ func (s *Service) Create(task model.Task) (model.Task, error) {
 	if task.PipelineJSON == "" {
 		task.PipelineJSON = DefaultPipelineJSON(task.Name)
 	}
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&task).Error; err != nil {
-			return err
-		}
-		return createPipelineVersion(tx, task.ID, task.PipelineJSON, "", "initial")
-	})
+	err := s.db.Create(&task).Error
 	return task, err
 }
 
@@ -83,138 +77,70 @@ func (s *Service) UpdatePipeline(id uint, pipeline node.PipelineDefinition, crea
 	if err != nil {
 		return pipeline, err
 	}
-	next := string(content)
-	if normalizePipelineJSON(task.PipelineJSON) == normalizePipelineJSON(next) {
-		return pipeline, nil
-	}
-	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := ensurePipelineHistoryTx(tx, task.ID, task.PipelineJSON, ""); err != nil {
-			return err
-		}
-		task.PipelineJSON = next
-		if err := tx.Save(&task).Error; err != nil {
-			return err
-		}
-		return createPipelineVersion(tx, task.ID, next, createdBy, "save")
-	})
-	return pipeline, err
+	task.PipelineJSON = string(content)
+	return pipeline, s.db.Save(&task).Error
 }
 
 func (s *Service) PipelineVersions(taskID uint) ([]model.PipelineVersion, error) {
-	task, err := s.Get(taskID)
-	if err != nil {
+	if _, err := s.Get(taskID); err != nil {
 		return nil, err
 	}
-	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		return ensurePipelineHistoryTx(tx, task.ID, task.PipelineJSON, "")
-	}); err != nil {
+	var runs []model.TaskRun
+	if err := s.db.
+		Where("task_id = ? AND pipeline_snapshot_json <> ''", taskID).
+		Order("id desc").
+		Find(&runs).Error; err != nil {
 		return nil, err
 	}
-	var versions []model.PipelineVersion
-	err = s.db.Where("task_id = ?", taskID).Order("version desc").Find(&versions).Error
-	return versions, err
+	versions := make([]model.PipelineVersion, 0, len(runs))
+	for _, run := range runs {
+		versions = append(versions, pipelineVersionFromRun(run))
+	}
+	return versions, nil
 }
 
 func (s *Service) PipelineVersion(taskID uint, versionID uint) (model.PipelineVersion, error) {
-	if err := s.EnsurePipelineHistory(taskID); err != nil {
+	var run model.TaskRun
+	err := s.db.Where("task_id = ? AND id = ? AND pipeline_snapshot_json <> ''", taskID, versionID).First(&run).Error
+	if err != nil {
 		return model.PipelineVersion{}, err
 	}
-	var version model.PipelineVersion
-	err := s.db.Where("task_id = ? AND id = ?", taskID, versionID).First(&version).Error
-	return version, err
+	return pipelineVersionFromRun(run), nil
 }
 
-func (s *Service) RestorePipelineVersion(taskID uint, versionID uint, createdBy string) (node.PipelineDefinition, model.PipelineVersion, error) {
-	var restored node.PipelineDefinition
-	var created model.PipelineVersion
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		var task model.Task
-		if err := tx.First(&task, taskID).Error; err != nil {
-			return err
-		}
-		if err := ensurePipelineHistoryTx(tx, task.ID, task.PipelineJSON, ""); err != nil {
-			return err
-		}
-		var target model.PipelineVersion
-		if err := tx.Where("task_id = ? AND id = ?", taskID, versionID).First(&target).Error; err != nil {
-			return err
-		}
-		if err := json.Unmarshal([]byte(target.PipelineJSON), &restored); err != nil {
-			return err
-		}
-		if normalizePipelineJSON(task.PipelineJSON) == normalizePipelineJSON(target.PipelineJSON) {
-			created = target
-			return nil
-		}
-		task.PipelineJSON = target.PipelineJSON
-		if err := tx.Save(&task).Error; err != nil {
-			return err
-		}
-		message := fmt.Sprintf("restore v%d", target.Version)
-		createdVersion, err := createPipelineVersionRecord(tx, task.ID, target.PipelineJSON, createdBy, message)
-		if err != nil {
-			return err
-		}
-		created = createdVersion
-		return nil
-	})
-	return restored, created, err
-}
-
-func (s *Service) EnsurePipelineHistory(taskID uint) error {
+func (s *Service) CreateFromPipelineVersion(taskID uint, versionID uint, name string) (model.Task, error) {
 	task, err := s.Get(taskID)
 	if err != nil {
-		return err
+		return model.Task{}, err
 	}
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		return ensurePipelineHistoryTx(tx, task.ID, task.PipelineJSON, "")
+	version, err := s.PipelineVersion(taskID, versionID)
+	if err != nil {
+		return model.Task{}, err
+	}
+	if name == "" {
+		name = fmt.Sprintf("%s copy from run #%d", task.Name, version.TaskRunID)
+	}
+	return s.Create(model.Task{
+		ProjectID:       task.ProjectID,
+		Name:            name,
+		Description:     task.Description,
+		PipelineJSON:    version.PipelineJSON,
+		AllowConcurrent: task.AllowConcurrent,
+		TimeoutSeconds:  task.TimeoutSeconds,
 	})
 }
 
-func ensurePipelineHistoryTx(tx *gorm.DB, taskID uint, pipelineJSON string, createdBy string) error {
-	var count int64
-	if err := tx.Model(&model.PipelineVersion{}).Where("task_id = ?", taskID).Count(&count).Error; err != nil {
-		return err
+func pipelineVersionFromRun(run model.TaskRun) model.PipelineVersion {
+	return model.PipelineVersion{
+		ID:           run.ID,
+		TaskID:       run.TaskID,
+		TaskRunID:    run.ID,
+		Version:      int(run.ID),
+		PipelineJSON: run.PipelineSnapshotJSON,
+		CreatedBy:    run.TriggeredBy,
+		Message:      fmt.Sprintf("Run #%d", run.ID),
+		Status:       run.Status,
+		TriggerType:  run.TriggerType,
+		CreatedAt:    run.CreatedAt,
 	}
-	if count > 0 {
-		return nil
-	}
-	return createPipelineVersion(tx, taskID, pipelineJSON, createdBy, "initial")
-}
-
-func createPipelineVersion(tx *gorm.DB, taskID uint, pipelineJSON string, createdBy string, message string) error {
-	_, err := createPipelineVersionRecord(tx, taskID, pipelineJSON, createdBy, message)
-	return err
-}
-
-func createPipelineVersionRecord(tx *gorm.DB, taskID uint, pipelineJSON string, createdBy string, message string) (model.PipelineVersion, error) {
-	var latest model.PipelineVersion
-	version := 1
-	err := tx.Where("task_id = ?", taskID).Order("version desc").First(&latest).Error
-	if err == nil {
-		version = latest.Version + 1
-	} else if err != gorm.ErrRecordNotFound {
-		return model.PipelineVersion{}, err
-	}
-	item := model.PipelineVersion{
-		TaskID:       taskID,
-		Version:      version,
-		PipelineJSON: pipelineJSON,
-		CreatedBy:    createdBy,
-		Message:      message,
-	}
-	err = tx.Create(&item).Error
-	return item, err
-}
-
-func normalizePipelineJSON(content string) string {
-	var value any
-	if err := json.Unmarshal([]byte(content), &value); err != nil {
-		return strings.TrimSpace(content)
-	}
-	normalized, err := json.Marshal(value)
-	if err != nil {
-		return strings.TrimSpace(content)
-	}
-	return string(normalized)
 }

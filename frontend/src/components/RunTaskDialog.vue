@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" title="运行任务" width="500px" :close-on-click-modal="false">
+  <el-dialog v-model="visible" :title="dialogTitle" width="500px" :close-on-click-modal="false">
     <div v-if="loading" class="run-dialog-loading">
       <el-icon class="is-loading" size="32"><Loading /></el-icon>
       <p>加载参数配置...</p>
@@ -92,18 +92,22 @@ const inputs = ref<RunConfigInput[]>([])
 const form = reactive<Record<string, unknown>>({})
 const fileLists = reactive<Record<string, UploadUserFile[]>>({})
 let activeTaskId = 0
+let activePipelineVersionId: number | undefined
+const dialogTitle = ref('运行任务')
 
 const runningText = computed(() => {
   if (!running.value) return '运行'
   return hasFileInputs() ? '上传并运行...' : '运行中...'
 })
 
-async function open(taskId: number) {
+async function open(taskId: number, options: { pipelineVersionId?: number; title?: string } = {}) {
   activeTaskId = taskId
+  activePipelineVersionId = options.pipelineVersionId
+  dialogTitle.value = options.title || '运行任务'
   loading.value = true
   visible.value = true
   try {
-    const config = await api.runConfig(activeTaskId)
+    const config = await api.runConfig(activeTaskId, activePipelineVersionId)
     inputs.value = config.inputs
     for (const key of Object.keys(form)) delete form[key]
     for (const key of Object.keys(fileLists)) delete fileLists[key]
@@ -170,12 +174,12 @@ async function doRun() {
     const payload = buildRunInputPayload()
     let run: TaskRun
     if (hasFileInputs()) {
-      preparedRun = await api.prepareTaskRun(activeTaskId, payload)
+      preparedRun = await api.prepareTaskRun(activeTaskId, payload, activePipelineVersionId)
       await uploadRunFiles(preparedRun.id)
       run = await api.startTaskRun(preparedRun.id)
       preparedRun = undefined
     } else {
-      run = await api.runTask(activeTaskId, payload)
+      run = await api.runTask(activeTaskId, payload, activePipelineVersionId)
     }
     visible.value = false
     ElMessage.success(`Run #${run.id} 已启动`)
