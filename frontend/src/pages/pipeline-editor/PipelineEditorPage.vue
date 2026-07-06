@@ -26,10 +26,16 @@
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="single" :disabled="!selectedNode">
-                仅运行选中节点
+                <span class="run-menu-item">
+                  <el-icon><Aim /></el-icon>
+                  <span>仅运行选中节点</span>
+                </span>
               </el-dropdown-item>
               <el-dropdown-item command="from-selected" :disabled="!selectedNode">
-                从选中节点开始运行
+                <span class="run-menu-item">
+                  <el-icon><Promotion /></el-icon>
+                  <span>从选中节点开始运行</span>
+                </span>
               </el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -383,7 +389,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, Back, Clock, CopyDocument, Delete, DocumentChecked, EditPen, Plus, RefreshLeft, Setting, VideoPlay } from '@element-plus/icons-vue'
+import { Aim, ArrowDown, Back, Clock, CopyDocument, Delete, DocumentChecked, EditPen, Plus, Promotion, RefreshLeft, Setting, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@/api'
 import { usePipelineEditor } from '@/composables/usePipelineEditor'
@@ -874,6 +880,19 @@ onBeforeUnmount(() => activeRunEvents?.close())
 :deep(.editor-bar .el-button--primary:hover) {
   background: #0f766e !important;
   border-color: #0f766e !important;
+}
+
+.run-menu-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 148px;
+  font-weight: 700;
+}
+
+.run-menu-item .el-icon {
+  color: #0d9488;
+  font-size: 15px;
 }
 
 .editor-body {

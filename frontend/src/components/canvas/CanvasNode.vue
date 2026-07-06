@@ -123,13 +123,43 @@ const icon  = computed(() => CATEGORY[props.data?.category]?.icon  ?? CATEGORY.d
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
   position: relative;
 }
 
 .cn--selected .cn-card {
   border-color: #2dd4bf;
-  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
+  background:
+    linear-gradient(135deg, rgba(45, 212, 191, 0.2), rgba(37, 38, 51, 0.94) 42%),
+    #252633;
+  box-shadow:
+    0 0 0 2px rgba(45, 212, 191, 0.95),
+    0 0 0 7px rgba(45, 212, 191, 0.16),
+    0 16px 32px rgba(0, 0, 0, 0.32),
+    inset 0 0 20px rgba(45, 212, 191, 0.12);
+}
+
+.cn--selected .cn-stripe {
+  width: 6px;
+  box-shadow: 0 0 16px rgba(45, 212, 191, 0.85);
+}
+
+.cn--selected .cn-card::after {
+  content: "";
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2dd4bf;
+  box-shadow:
+    0 0 0 3px rgba(45, 212, 191, 0.2),
+    0 0 14px rgba(45, 212, 191, 0.9);
+}
+
+.cn--selected .cn-name {
+  color: #f8fafc;
 }
 
 .cn--running .cn-card  { border-color: #3b82f6; animation: pulse 1.6s ease-in-out infinite; }
