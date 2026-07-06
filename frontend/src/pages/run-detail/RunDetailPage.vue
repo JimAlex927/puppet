@@ -71,13 +71,37 @@
     <div v-if="run && (activeTab === 'execution' || activeTab === 'logs')" class="run-body">
       <!-- Left: DAG or realtime logs -->
       <div v-if="activeTab === 'execution'" class="run-dag-panel">
-        <RunDAG
-          v-if="pipelineSnapshot"
-          :pipeline="pipelineSnapshot"
-          :node-runs="nodeRuns"
-          :selected-node-run-id="selectedNodeRunId"
-          @node-click="selectByNodeId"
-        />
+        <div class="run-dag-main">
+          <RunDAG
+            v-if="pipelineSnapshot"
+            :pipeline="pipelineSnapshot"
+            :node-runs="nodeRuns"
+            :selected-node-run-id="selectedNodeRunId"
+            @node-click="selectByNodeId"
+          />
+        </div>
+        <div class="run-log-dock" :class="{ 'run-log-dock--collapsed': logDockCollapsed }">
+          <div class="run-log-toolbar run-log-toolbar--dock">
+            <div>
+              <div class="run-log-title">{{ selectedNodeRun ? selectedNodeRun.nodeName : '全部日志' }}</div>
+              <div class="run-log-sub">{{ filteredLogs.length }} 条日志实时输出</div>
+            </div>
+            <el-space>
+              <el-button size="small" @click="activeTab = 'logs'">放大</el-button>
+              <el-button size="small" @click="logDockCollapsed = !logDockCollapsed">
+                {{ logDockCollapsed ? '展开' : '收起' }}
+              </el-button>
+            </el-space>
+          </div>
+          <div v-if="!logDockCollapsed" ref="logViewer" class="run-log run-log--dock">
+            <div
+              v-for="log in filteredLogs"
+              :key="log.id ?? `${log.sequence}-${log.content}`"
+              :class="logClass(log)"
+            >{{ logPrefix(log) }}{{ log.content }}</div>
+            <div v-if="!filteredLogs.length" class="run-log-empty">暂无日志</div>
+          </div>
+        </div>
       </div>
       <div v-else class="run-log-panel">
         <div class="run-log-toolbar">
@@ -336,6 +360,7 @@ const fileLoading = ref(false)
 const selectedFilePaths = ref<string[]>([])
 const fileBundles = ref<TaskRunFileBundle[]>([])
 const creatingTaskFromHistory = ref(false)
+const logDockCollapsed = ref(false)
 const logViewer = ref<HTMLElement>()
 const runDialog = ref<InstanceType<typeof RunTaskDialog>>()
 let sse: EventSource | undefined
@@ -551,10 +576,16 @@ watch(() => logs.value.length, async () => {
 
 watch(activeTab, async (tab) => {
   if (tab === 'files' && !fileList.value) void loadTaskRunFiles()
-  if (tab === 'logs') {
+  if (tab === 'logs' || tab === 'execution') {
     await nextTick()
     if (logViewer.value) logViewer.value.scrollTop = logViewer.value.scrollHeight
   }
+})
+
+watch(logDockCollapsed, async (collapsed) => {
+  if (collapsed) return
+  await nextTick()
+  if (logViewer.value) logViewer.value.scrollTop = logViewer.value.scrollHeight
 })
 
 function logPrefix(log: RunLog) {
@@ -952,8 +983,37 @@ onBeforeUnmount(() => sse?.close())
 
 /* DAG panel */
 .run-dag-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   border-right: 1px solid #2d2e3d;
   overflow: hidden;
+}
+
+.run-dag-main {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.run-log-dock {
+  flex-shrink: 0;
+  height: 230px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #0c1220;
+  border-top: 1px solid #1e2a3d;
+}
+
+.run-log-dock--collapsed {
+  height: 45px;
+}
+
+.run-log-toolbar--dock {
+  min-height: 45px;
+  padding: 7px 12px;
 }
 
 .run-log-panel {
@@ -1136,6 +1196,7 @@ onBeforeUnmount(() => sse?.close())
 /* Log viewer */
 .run-log {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   background: #0c1220;
   color: #dbeafe;
@@ -1144,6 +1205,12 @@ onBeforeUnmount(() => sse?.close())
   line-height: 1.6;
   padding: 12px;
   white-space: pre-wrap;
+}
+
+.run-log--dock {
+  font-size: 11px;
+  line-height: 1.55;
+  padding: 9px 12px;
 }
 
 .run-log::-webkit-scrollbar { width: 4px; }
