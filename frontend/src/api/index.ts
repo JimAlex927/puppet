@@ -109,11 +109,21 @@ export const api = {
       url: `/tasks/${taskId}/run-config`,
       params: pipelineVersionId ? { pipelineVersionId } : undefined,
     }),
+  runConfigForPipeline: (taskId: number, pipeline: PipelineDefinition) =>
+    request<RunConfig>({
+      url: `/tasks/${taskId}/run-config`,
+      method: 'POST',
+      data: { pipeline },
+    }),
 
   runTask: (taskId: number, input: Record<string, unknown> = {}, pipelineVersionId?: number) =>
     request<TaskRun>({ url: `/tasks/${taskId}/run`, method: 'POST', data: { input, pipelineVersionId } }),
   prepareTaskRun: (taskId: number, input: Record<string, unknown> = {}, pipelineVersionId?: number) =>
     request<TaskRun>({ url: `/tasks/${taskId}/runs/prepare`, method: 'POST', data: { input, pipelineVersionId } }),
+  runTaskWithPipeline: (taskId: number, input: Record<string, unknown> = {}, pipeline: PipelineDefinition) =>
+    request<TaskRun>({ url: `/tasks/${taskId}/run`, method: 'POST', data: { input, pipeline } }),
+  prepareTaskRunWithPipeline: (taskId: number, input: Record<string, unknown> = {}, pipeline: PipelineDefinition) =>
+    request<TaskRun>({ url: `/tasks/${taskId}/runs/prepare`, method: 'POST', data: { input, pipeline } }),
   startTaskRun: (runId: number) => request<TaskRun>({ url: `/task-runs/${runId}/start`, method: 'POST' }),
   taskRuns: (taskId: number) => request<TaskRun[]>({ url: `/tasks/${taskId}/runs` }),
   taskRun: (id: number) => request<TaskRun>({ url: `/task-runs/${id}` }),

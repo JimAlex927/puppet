@@ -81,6 +81,18 @@ export function usePipelineEditor(taskId: number) {
     return { nodes, edges }
   }
 
+  function buildPipelineSnapshot(currentVFNodes?: Node[]): PipelineDefinition | null {
+    if (!pipeline.value) return null
+    const cloned = JSON.parse(JSON.stringify(pipeline.value)) as PipelineDefinition
+    if (currentVFNodes) {
+      for (const vfNode of currentVFNodes) {
+        const pn = cloned.nodes.find((n) => n.id === vfNode.id)
+        if (pn) pn.position = vfNode.position
+      }
+    }
+    return serializePipeline(cloned)
+  }
+
   // ── Canvas event handlers (called by PipelineEditorPage) ──────────
 
   function handleConnect(sourceId: string, sourceHandle: string, targetId: string) {
@@ -205,6 +217,7 @@ export function usePipelineEditor(taskId: number) {
     taskForm,
     load,
     buildFlowElements,
+    buildPipelineSnapshot,
     handleConnect,
     handleEdgesDelete,
     handleNodesDelete,

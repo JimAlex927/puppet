@@ -171,6 +171,7 @@ func NewRouter(db *gorm.DB, registry *node.Registry, configRegistry *confignode.
 			protected.GET("/node-types", h.nodeTypes)
 			protected.GET("/config-node-types", h.configNodeTypes)
 			protected.GET("/tasks/:id/run-config", h.getRunConfig)
+			protected.POST("/tasks/:id/run-config", h.resolveRunConfig)
 
 			protected.POST("/tasks/:id/run", h.runTask)
 			protected.POST("/tasks/:id/runs/prepare", h.prepareTaskRun)
@@ -753,6 +754,31 @@ func (h *Handler) getRunConfig(c *gin.Context) {
 	ok(c, gin.H{"inputs": resolved})
 }
 
+func (h *Handler) resolveRunConfig(c *gin.Context) {
+	var req struct {
+		Pipeline *node.PipelineDefinition `json:"pipeline"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		fail(c, http.StatusBadRequest, err)
+		return
+	}
+	if req.Pipeline == nil {
+		fail(c, http.StatusBadRequest, errors.New("pipeline is required"))
+		return
+	}
+	pipeline, err := normalizeRunPipeline(*req.Pipeline)
+	if err != nil {
+		fail(c, http.StatusBadRequest, err)
+		return
+	}
+	resolved, err := h.resolveRunInputs(c.Request.Context(), pipeline)
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	ok(c, gin.H{"inputs": resolved})
+}
+
 func (h *Handler) pipelineForRunRequest(taskID uint, pipelineVersionID uint) (node.PipelineDefinition, string, error) {
 	if pipelineVersionID == 0 {
 		task, err := h.tasks.Get(taskID)
@@ -774,6 +800,45 @@ func (h *Handler) pipelineForRunRequest(taskID uint, pipelineVersionID uint) (no
 		return node.PipelineDefinition{}, "", err
 	}
 	return pipeline, version.PipelineJSON, nil
+}
+
+func (h *Handler) pipelineForAdHocRunRequest(taskID uint, pipelineVersionID uint, adHoc *node.PipelineDefinition) (node.PipelineDefinition, string, error) {
+	if adHoc == nil {
+		return h.pipelineForRunRequest(taskID, pipelineVersionID)
+	}
+	pipeline, err := normalizeRunPipeline(*adHoc)
+	if err != nil {
+		return node.PipelineDefinition{}, "", err
+	}
+	content, err := json.Marshal(pipeline)
+	if err != nil {
+		return node.PipelineDefinition{}, "", err
+	}
+	return pipeline, string(content), nil
+}
+
+func normalizeRunPipeline(pipeline node.PipelineDefinition) (node.PipelineDefinition, error) {
+	if pipeline.Name == "" {
+		pipeline.Name = "Pipeline"
+	}
+	if pipeline.AgentSelector.Labels == nil {
+		pipeline.AgentSelector.Labels = []string{"local"}
+	}
+	for index := range pipeline.Nodes {
+		if pipeline.Nodes[index].Params == nil {
+			pipeline.Nodes[index].Params = map[string]any{}
+		}
+		if pipeline.Nodes[index].ID == "" {
+			pipeline.Nodes[index].ID = fmt.Sprintf("node-%d", index+1)
+		}
+	}
+	if pipeline.StartNodeID == "" && len(pipeline.Nodes) > 0 {
+		pipeline.StartNodeID = pipeline.Nodes[0].ID
+	}
+	if err := validatePipelineRefs(pipeline); err != nil {
+		return node.PipelineDefinition{}, err
+	}
+	return pipeline, nil
 }
 
 func (h *Handler) generateWebhookToken(c *gin.Context) {
@@ -845,12 +910,13 @@ func generateToken() (string, error) {
 
 func (h *Handler) runTask(c *gin.Context) {
 	var req struct {
-		Input             map[string]any `json:"input"`
-		PipelineVersionID uint           `json:"pipelineVersionId"`
+		Input             map[string]any           `json:"input"`
+		PipelineVersionID uint                     `json:"pipelineVersionId"`
+		Pipeline          *node.PipelineDefinition `json:"pipeline"`
 	}
 	_ = c.ShouldBindJSON(&req)
 	taskID := paramID(c, "id")
-	pipeline, snapshot, err := h.pipelineForRunRequest(taskID, req.PipelineVersionID)
+	pipeline, snapshot, err := h.pipelineForAdHocRunRequest(taskID, req.PipelineVersionID, req.Pipeline)
 	if err != nil {
 		respond(c, nil, err)
 		return
@@ -872,12 +938,13 @@ func (h *Handler) runTask(c *gin.Context) {
 
 func (h *Handler) prepareTaskRun(c *gin.Context) {
 	var req struct {
-		Input             map[string]any `json:"input"`
-		PipelineVersionID uint           `json:"pipelineVersionId"`
+		Input             map[string]any           `json:"input"`
+		PipelineVersionID uint                     `json:"pipelineVersionId"`
+		Pipeline          *node.PipelineDefinition `json:"pipeline"`
 	}
 	_ = c.ShouldBindJSON(&req)
 	taskID := paramID(c, "id")
-	pipeline, snapshot, err := h.pipelineForRunRequest(taskID, req.PipelineVersionID)
+	pipeline, snapshot, err := h.pipelineForAdHocRunRequest(taskID, req.PipelineVersionID, req.Pipeline)
 	if err != nil {
 		respond(c, nil, err)
 		return

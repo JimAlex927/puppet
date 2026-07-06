@@ -81,7 +81,7 @@ import Tus from '@uppy/tus'
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type UploadFiles, type UploadUserFile } from 'element-plus'
 import { api } from '@/api'
-import type { RunConfigInput, TaskRun } from '@/types'
+import type { PipelineDefinition, RunConfigInput, TaskRun } from '@/types'
 
 const emit = defineEmits<{ success: [run: TaskRun] }>()
 
@@ -93,6 +93,7 @@ const form = reactive<Record<string, unknown>>({})
 const fileLists = reactive<Record<string, UploadUserFile[]>>({})
 let activeTaskId = 0
 let activePipelineVersionId: number | undefined
+let activePipelineSnapshot: PipelineDefinition | undefined
 const dialogTitle = ref('运行任务')
 
 const runningText = computed(() => {
@@ -100,14 +101,17 @@ const runningText = computed(() => {
   return hasFileInputs() ? '上传并运行...' : '运行中...'
 })
 
-async function open(taskId: number, options: { pipelineVersionId?: number; title?: string } = {}) {
+async function open(taskId: number, options: { pipelineVersionId?: number; pipelineSnapshot?: PipelineDefinition; title?: string } = {}) {
   activeTaskId = taskId
   activePipelineVersionId = options.pipelineVersionId
+  activePipelineSnapshot = options.pipelineSnapshot
   dialogTitle.value = options.title || '运行任务'
   loading.value = true
   visible.value = true
   try {
-    const config = await api.runConfig(activeTaskId, activePipelineVersionId)
+    const config = activePipelineSnapshot
+      ? await api.runConfigForPipeline(activeTaskId, activePipelineSnapshot)
+      : await api.runConfig(activeTaskId, activePipelineVersionId)
     inputs.value = config.inputs
     for (const key of Object.keys(form)) delete form[key]
     for (const key of Object.keys(fileLists)) delete fileLists[key]
@@ -174,12 +178,16 @@ async function doRun() {
     const payload = buildRunInputPayload()
     let run: TaskRun
     if (hasFileInputs()) {
-      preparedRun = await api.prepareTaskRun(activeTaskId, payload, activePipelineVersionId)
+      preparedRun = activePipelineSnapshot
+        ? await api.prepareTaskRunWithPipeline(activeTaskId, payload, activePipelineSnapshot)
+        : await api.prepareTaskRun(activeTaskId, payload, activePipelineVersionId)
       await uploadRunFiles(preparedRun.id)
       run = await api.startTaskRun(preparedRun.id)
       preparedRun = undefined
     } else {
-      run = await api.runTask(activeTaskId, payload, activePipelineVersionId)
+      run = activePipelineSnapshot
+        ? await api.runTaskWithPipeline(activeTaskId, payload, activePipelineSnapshot)
+        : await api.runTask(activeTaskId, payload, activePipelineVersionId)
     }
     visible.value = false
     ElMessage.success(`Run #${run.id} 已启动`)

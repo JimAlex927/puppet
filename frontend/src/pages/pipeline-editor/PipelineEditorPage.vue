@@ -18,6 +18,21 @@
       />
 
       <el-space>
+        <el-switch
+          v-model="runContinueFromNode"
+          size="small"
+          active-text="连续"
+          inactive-text="单节点"
+        />
+        <el-button size="small" :icon="VideoPlay" @click="runCurrentPipeline">运行</el-button>
+        <el-button
+          size="small"
+          :icon="VideoPlay"
+          :disabled="!selectedNode"
+          @click="runSelectedNode"
+        >
+          从选中节点运行
+        </el-button>
         <el-button size="small" :icon="Clock" @click="openHistory">历史</el-button>
         <el-button size="small" :icon="Setting" @click="settingsVisible = true">设置</el-button>
         <el-button size="small" :icon="Back" @click="goBack">返回</el-button>
@@ -48,6 +63,69 @@
         :on-save-pipeline="savePipelineOnly"
         @close="selectedNodeId = null"
       />
+
+      <aside v-if="activeRun" class="editor-run-panel">
+        <div class="erp-head">
+          <div>
+            <div class="erp-title">
+              <span>Run #{{ activeRun.id }}</span>
+              <StatusBadge :status="activeRun.status" size="small" />
+            </div>
+            <div class="erp-sub">
+              {{ activeRunStartLabel }} · {{ activeRun.triggerType || 'manual' }}
+            </div>
+          </div>
+          <el-space>
+            <el-button size="small" @click="router.push(`/runs/${activeRun.id}`)">详情</el-button>
+            <el-button
+              v-if="canCancel(activeRun.status)"
+              size="small"
+              type="danger"
+              @click="cancelActiveRun"
+            >
+              取消
+            </el-button>
+            <el-button size="small" @click="closeRunPanel">关闭</el-button>
+          </el-space>
+        </div>
+
+        <div class="erp-dag">
+          <RunDAG
+            v-if="activeRunPipeline"
+            :pipeline="activeRunPipeline"
+            :node-runs="activeNodeRuns"
+            :selected-node-run-id="selectedRunNodeRunId"
+            @node-click="selectRunNodeByNodeId"
+          />
+        </div>
+
+        <div class="erp-nodes">
+          <button
+            class="erp-node"
+            :class="{ 'erp-node--active': selectedRunNodeRunId === null }"
+            @click="selectedRunNodeRunId = null"
+          >
+            <span>全部日志</span>
+            <el-tag size="small" type="info" effect="dark">{{ activeLogs.length }}</el-tag>
+          </button>
+          <button
+            v-for="nr in activeNodeRuns"
+            :key="nr.id"
+            class="erp-node"
+            :class="{ 'erp-node--active': selectedRunNodeRunId === nr.id }"
+            @click="selectedRunNodeRunId = nr.id"
+          >
+            <span>{{ nr.nodeIndex + 1 }}. {{ nr.nodeName }}</span>
+            <StatusBadge :status="nr.status" size="small" />
+          </button>
+        </div>
+
+        <div class="erp-log-head">
+          <span>{{ selectedRunNode ? selectedRunNode.nodeName : '实时日志' }}</span>
+          <span>{{ filteredRunLogs.length }} 条</span>
+        </div>
+        <RunLogViewer class="erp-log" :logs="filteredRunLogs" />
+      </aside>
     </div>
 
     <!-- ── Task settings drawer ───────────────────────────────────── -->
@@ -302,7 +380,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Back, Clock, CopyDocument, Delete, DocumentChecked, EditPen, Plus, RefreshLeft, Setting, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -312,8 +390,10 @@ import NodePalette from '@/components/canvas/NodePalette.vue'
 import PipelineCanvas from '@/components/canvas/PipelineCanvas.vue'
 import NodeConfigDrawer from '@/components/canvas/NodeConfigDrawer.vue'
 import RunTaskDialog from '@/components/RunTaskDialog.vue'
+import RunDAG from '@/components/run/RunDAG.vue'
+import RunLogViewer from '@/components/RunLogViewer.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
-import type { NodeMetadata, PipelineDefinition, PipelineInput, PipelineVersion, TaskRun } from '@/types'
+import type { NodeMetadata, NodeRun, PipelineDefinition, PipelineInput, PipelineVersion, RunLog, TaskRun } from '@/types'
 import { fmtDate } from '@/utils/format'
 
 const route = useRoute()
@@ -326,6 +406,7 @@ const {
   selectedNodeId, selectedNode, selectedMetadata,
   taskForm,
   load, buildFlowElements,
+  buildPipelineSnapshot,
   handleConnect, handleEdgesDelete, handleNodesDelete,
   createPipelineNode, savePipelineOnly, save,
 } = usePipelineEditor(taskId)
@@ -338,12 +419,32 @@ const historyLoading = ref(false)
 const creatingTaskFromHistory = ref(false)
 const historyVersions = ref<PipelineVersion[]>([])
 const selectedHistory = ref<PipelineVersion>()
+const runContinueFromNode = ref(true)
+const activeRun = ref<TaskRun>()
+const activeRunPipeline = ref<PipelineDefinition | null>(null)
+const activeRunStartLabel = ref('当前起点')
+const activeNodeRuns = ref<NodeRun[]>([])
+const activeLogs = ref<RunLog[]>([])
+const selectedRunNodeRunId = ref<number | null>(null)
+let activeRunEvents: EventSource | undefined
+let transientLogId = -1
 
 const selectedHistorySummary = computed(() => {
   if (!selectedHistory.value) return ''
   const parsed = parsePipelineJSON(selectedHistory.value.pipelineJson)
   if (!parsed) return '无法解析 Pipeline 内容'
   return `${parsed.nodes?.length ?? 0} 个节点，${parsed.inputs?.length ?? 0} 个运行参数`
+})
+
+const selectedRunNode = computed(() =>
+  selectedRunNodeRunId.value === null
+    ? undefined
+    : activeNodeRuns.value.find((item) => item.id === selectedRunNodeRunId.value),
+)
+
+const filteredRunLogs = computed(() => {
+  if (selectedRunNodeRunId.value === null) return activeLogs.value
+  return activeLogs.value.filter((item) => item.nodeRunId === selectedRunNodeRunId.value || item.nodeRunId === 0)
 })
 
 // ── Pipeline inputs management ─────────────────────────────────
@@ -480,6 +581,7 @@ async function selectHistory(version: PipelineVersion) {
 }
 
 function runHistoryVersion(version: PipelineVersion) {
+  activeRunStartLabel.value = `Run #${version.taskRunId} 历史版本`
   runDialog.value?.open(taskId, {
     pipelineVersionId: version.taskRunId,
     title: `运行任务 - Run #${version.taskRunId} 版本`,
@@ -525,6 +627,131 @@ function parsePipelineJSON(content: string): PipelineDefinition | null {
   }
 }
 
+function runCurrentPipeline() {
+  const snapshot = buildRunnableSnapshot()
+  if (!snapshot) return
+  const startNode = snapshot.nodes.find((node) => node.id === snapshot.startNodeId)
+  runDialog.value?.open(taskId, {
+    pipelineSnapshot: snapshot,
+    title: `运行任务 - ${startNode?.name || '当前起点'}`,
+  })
+}
+
+function runSelectedNode() {
+  if (!selectedNode.value) {
+    ElMessage.warning('请先选中一个节点')
+    return
+  }
+  const snapshot = buildRunnableSnapshot(selectedNode.value.id, runContinueFromNode.value)
+  if (!snapshot) return
+  runDialog.value?.open(taskId, {
+    pipelineSnapshot: snapshot,
+    title: runContinueFromNode.value
+      ? `从「${selectedNode.value.name}」连续运行`
+      : `只运行「${selectedNode.value.name}」`,
+  })
+}
+
+function buildRunnableSnapshot(startNodeId?: string, continueFromNode = true) {
+  const snapshot = buildPipelineSnapshot(canvasRef.value?.getCurrentNodes())
+  if (!snapshot) return null
+  if (startNodeId) {
+    const startNode = snapshot.nodes.find((node) => node.id === startNodeId)
+    if (!startNode) {
+      ElMessage.warning('选中的节点不存在')
+      return null
+    }
+    snapshot.startNodeId = startNodeId
+    if (!continueFromNode) {
+      startNode.nextNodeId = ''
+      startNode.fallbackNodeId = ''
+    }
+  }
+  activeRunStartLabel.value = startNodeId
+    ? continueFromNode
+      ? `从 ${snapshot.nodes.find((node) => node.id === startNodeId)?.name || startNodeId} 连续运行`
+      : `只运行 ${snapshot.nodes.find((node) => node.id === startNodeId)?.name || startNodeId}`
+    : `从 ${snapshot.nodes.find((node) => node.id === snapshot.startNodeId)?.name || snapshot.startNodeId || '当前起点'} 运行`
+  return snapshot
+}
+
+async function activateRunPanel(run: TaskRun) {
+  activeRun.value = run
+  activeRunPipeline.value = parsePipelineJSON(run.pipelineSnapshotJson)
+  selectedRunNodeRunId.value = null
+  await loadActiveRunRuntime(run.id)
+  connectActiveRunEvents(run.id)
+}
+
+async function loadActiveRunRuntime(runId: number) {
+  const [nodeData, logData] = await Promise.all([
+    api.nodeRuns(runId),
+    api.runLogs(runId),
+  ])
+  activeNodeRuns.value = nodeData
+  activeLogs.value = logData
+}
+
+function connectActiveRunEvents(runId: number) {
+  activeRunEvents?.close()
+  const token = encodeURIComponent(localStorage.getItem('puppet_token') || '')
+  activeRunEvents = new EventSource(`/api/task-runs/${runId}/events?token=${token}`)
+  activeRunEvents.addEventListener('log', (event) => {
+    const data = JSON.parse(event.data)
+    activeLogs.value.push({
+      id: transientLogId--,
+      taskRunId: data.taskRunId,
+      nodeRunId: data.nodeRunId,
+      sequence: data.sequence,
+      stream: data.stream,
+      content: data.content,
+      createdAt: new Date().toISOString(),
+    })
+  })
+  activeRunEvents.addEventListener('node_status', (event) => {
+    const data = JSON.parse(event.data)
+    if (!data.nodeRun) return
+    const idx = activeNodeRuns.value.findIndex((item) => item.id === data.nodeRun.id)
+    if (idx >= 0) activeNodeRuns.value[idx] = data.nodeRun
+    else activeNodeRuns.value.push(data.nodeRun)
+    activeNodeRuns.value.sort((a, b) => a.nodeIndex - b.nodeIndex)
+  })
+  activeRunEvents.addEventListener('task_status', (event) => {
+    const data = JSON.parse(event.data)
+    if (data.run) activeRun.value = data.run
+    else if (activeRun.value) activeRun.value.status = data.status
+    if (activeRun.value && !canCancel(activeRun.value.status)) {
+      void loadActiveRunRuntime(activeRun.value.id)
+    }
+  })
+}
+
+function selectRunNodeByNodeId(nodeId: string) {
+  const nodeRun = activeNodeRuns.value.find((item) => item.nodeId === nodeId)
+  selectedRunNodeRunId.value = nodeRun?.id ?? null
+}
+
+function canCancel(status: string) {
+  return status === 'pending' || status === 'running'
+}
+
+async function cancelActiveRun() {
+  if (!activeRun.value) return
+  activeRun.value = await api.cancelTaskRun(activeRun.value.id)
+  ElMessage.success('已取消')
+  await loadActiveRunRuntime(activeRun.value.id)
+}
+
+function closeRunPanel() {
+  activeRunEvents?.close()
+  activeRunEvents = undefined
+  activeRun.value = undefined
+  activeRunPipeline.value = null
+  activeNodeRuns.value = []
+  activeLogs.value = []
+  selectedRunNodeRunId.value = null
+}
+
 // Init canvas once pipeline + canvas are both ready
 watch([pipeline, () => !!canvasRef.value], ([pl, ready]) => {
   if (!pl || !ready) return
@@ -560,10 +787,11 @@ function goBack() {
 }
 
 function onRunSuccess(run: TaskRun) {
-  router.push(`/runs/${run.id}`)
+  void activateRunPanel(run)
 }
 
 onMounted(load)
+onBeforeUnmount(() => activeRunEvents?.close())
 </script>
 
 <style scoped>
@@ -645,6 +873,129 @@ onMounted(load)
   flex: 1;
   display: flex;
   overflow: hidden;
+}
+
+.editor-run-panel {
+  width: 420px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid #2d2e3d;
+  background: #151822;
+}
+
+.erp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #2d2e3d;
+  background: #1e1f2e;
+}
+
+.erp-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.erp-sub {
+  margin-top: 2px;
+  color: #8892a4;
+  font-size: 11px;
+}
+
+:deep(.erp-head .el-button) {
+  background: #252633;
+  border-color: #3a3b4e;
+  color: #c4cad4;
+}
+
+:deep(.erp-head .el-button:hover) {
+  background: #2d2e3d;
+  color: #e2e8f0;
+}
+
+:deep(.erp-head .el-button--danger) {
+  background: #7f1d1d !important;
+  border-color: #991b1b !important;
+  color: #fca5a5 !important;
+}
+
+.erp-dag {
+  height: 220px;
+  flex-shrink: 0;
+  border-bottom: 1px solid #2d2e3d;
+}
+
+.erp-nodes {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid #2d2e3d;
+}
+
+.erp-node {
+  height: 30px;
+  min-width: 112px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px;
+  border: 1px solid #2d2e3d;
+  border-radius: 6px;
+  background: #1e1f2e;
+  color: #c4cad4;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.erp-node span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.erp-node:hover,
+.erp-node--active {
+  border-color: #2dd4bf;
+  background: rgba(45, 212, 191, 0.1);
+  color: #e2e8f0;
+}
+
+.erp-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  color: #c4cad4;
+  font-size: 12px;
+  font-weight: 800;
+  border-bottom: 1px solid #2d2e3d;
+}
+
+.erp-log-head span:last-child {
+  color: #64748b;
+  font-weight: 700;
+}
+
+:deep(.erp-log.log-viewer) {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  border-radius: 0;
+  border: 0;
+  background: #0c1220;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 /* Pipeline input list */
