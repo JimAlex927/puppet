@@ -18,21 +18,22 @@
       />
 
       <el-space>
-        <el-switch
-          v-model="runContinueFromNode"
-          size="small"
-          active-text="连续"
-          inactive-text="单节点"
-        />
-        <el-button size="small" :icon="VideoPlay" @click="runCurrentPipeline">运行</el-button>
-        <el-button
-          size="small"
-          :icon="VideoPlay"
-          :disabled="!selectedNode"
-          @click="runSelectedNode"
-        >
-          从选中节点运行
-        </el-button>
+        <el-dropdown trigger="hover" @command="handleRunCommand">
+          <el-button size="small" :icon="VideoPlay" @click="runCurrentPipeline">
+            运行
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="single" :disabled="!selectedNode">
+                仅运行选中节点
+              </el-dropdown-item>
+              <el-dropdown-item command="from-selected" :disabled="!selectedNode">
+                从选中节点开始运行
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button size="small" :icon="Clock" @click="openHistory">历史</el-button>
         <el-button size="small" :icon="Setting" @click="settingsVisible = true">设置</el-button>
         <el-button size="small" :icon="Back" @click="goBack">返回</el-button>
@@ -382,7 +383,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Back, Clock, CopyDocument, Delete, DocumentChecked, EditPen, Plus, RefreshLeft, Setting, VideoPlay } from '@element-plus/icons-vue'
+import { ArrowDown, Back, Clock, CopyDocument, Delete, DocumentChecked, EditPen, Plus, RefreshLeft, Setting, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@/api'
 import { usePipelineEditor } from '@/composables/usePipelineEditor'
@@ -419,7 +420,6 @@ const historyLoading = ref(false)
 const creatingTaskFromHistory = ref(false)
 const historyVersions = ref<PipelineVersion[]>([])
 const selectedHistory = ref<PipelineVersion>()
-const runContinueFromNode = ref(true)
 const activeRun = ref<TaskRun>()
 const activeRunPipeline = ref<PipelineDefinition | null>(null)
 const activeRunStartLabel = ref('当前起点')
@@ -637,16 +637,24 @@ function runCurrentPipeline() {
   })
 }
 
-function runSelectedNode() {
+function handleRunCommand(command: string | number | object) {
+  if (command === 'single') {
+    runSelectedNode(false)
+  } else if (command === 'from-selected') {
+    runSelectedNode(true)
+  }
+}
+
+function runSelectedNode(continueFromNode: boolean) {
   if (!selectedNode.value) {
     ElMessage.warning('请先选中一个节点')
     return
   }
-  const snapshot = buildRunnableSnapshot(selectedNode.value.id, runContinueFromNode.value)
+  const snapshot = buildRunnableSnapshot(selectedNode.value.id, continueFromNode)
   if (!snapshot) return
   runDialog.value?.open(taskId, {
     pipelineSnapshot: snapshot,
-    title: runContinueFromNode.value
+    title: continueFromNode
       ? `从「${selectedNode.value.name}」连续运行`
       : `只运行「${selectedNode.value.name}」`,
   })
@@ -663,8 +671,7 @@ function buildRunnableSnapshot(startNodeId?: string, continueFromNode = true) {
     }
     snapshot.startNodeId = startNodeId
     if (!continueFromNode) {
-      startNode.nextNodeId = ''
-      startNode.fallbackNodeId = ''
+      snapshot.nodes = [{ ...startNode, nextNodeId: '', fallbackNodeId: '' }]
     }
   }
   activeRunStartLabel.value = startNodeId
