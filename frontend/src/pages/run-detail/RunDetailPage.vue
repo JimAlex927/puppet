@@ -46,6 +46,13 @@
       </button>
       <button
         class="run-tab"
+        :class="{ 'run-tab--active': activeTab === 'logs' }"
+        @click="activeTab = 'logs'"
+      >
+        运行日志
+      </button>
+      <button
+        class="run-tab"
         :class="{ 'run-tab--active': activeTab === 'files' }"
         @click="activeTab = 'files'"
       >
@@ -60,10 +67,10 @@
       </button>
     </div>
 
-    <!-- ── Main: DAG + Log ────────────────────────────────── -->
-    <div v-if="run && activeTab === 'execution'" class="run-body">
-      <!-- Left: DAG -->
-      <div class="run-dag-panel">
+    <!-- ── Main: DAG/Logs + Context ───────────────────────── -->
+    <div v-if="run && (activeTab === 'execution' || activeTab === 'logs')" class="run-body">
+      <!-- Left: DAG or realtime logs -->
+      <div v-if="activeTab === 'execution'" class="run-dag-panel">
         <RunDAG
           v-if="pipelineSnapshot"
           :pipeline="pipelineSnapshot"
@@ -72,8 +79,25 @@
           @node-click="selectByNodeId"
         />
       </div>
+      <div v-else class="run-log-panel">
+        <div class="run-log-toolbar">
+          <div>
+            <div class="run-log-title">{{ selectedNodeRun ? selectedNodeRun.nodeName : '全部日志' }}</div>
+            <div class="run-log-sub">{{ filteredLogs.length }} 条日志实时输出</div>
+          </div>
+          <el-button size="small" :icon="Refresh" @click="load">刷新</el-button>
+        </div>
+        <div ref="logViewer" class="run-log">
+          <div
+            v-for="log in filteredLogs"
+            :key="log.id ?? `${log.sequence}-${log.content}`"
+            :class="logClass(log)"
+          >{{ logPrefix(log) }}{{ log.content }}</div>
+          <div v-if="!filteredLogs.length" class="run-log-empty">暂无日志</div>
+        </div>
+      </div>
 
-      <!-- Right: Node list + Logs -->
+      <!-- Right: Node list + Context -->
       <div class="run-right">
         <!-- Node list -->
         <div class="run-node-list">
@@ -146,16 +170,6 @@
               <pre>{{ prettyJSON(runInputObject) }}</pre>
             </div>
           </template>
-        </div>
-
-        <!-- Log viewer -->
-        <div ref="logViewer" class="run-log">
-          <div
-            v-for="log in filteredLogs"
-            :key="log.id ?? `${log.sequence}-${log.content}`"
-            :class="logClass(log)"
-          >{{ logPrefix(log) }}{{ log.content }}</div>
-          <div v-if="!filteredLogs.length" class="run-log-empty">暂无日志</div>
         </div>
       </div>
     </div>
@@ -315,7 +329,7 @@ const run = ref<TaskRun>()
 const nodeRuns = ref<NodeRun[]>([])
 const logs = ref<RunLog[]>([])
 const selectedNodeRunId = ref<number | null>(null)
-const activeTab = ref<'execution' | 'files' | 'history'>('execution')
+const activeTab = ref<'execution' | 'logs' | 'files' | 'history'>('execution')
 const fileList = ref<TaskRunFileList>()
 const filePath = ref('')
 const fileLoading = ref(false)
@@ -535,8 +549,12 @@ watch(() => logs.value.length, async () => {
   if (logViewer.value) logViewer.value.scrollTop = logViewer.value.scrollHeight
 })
 
-watch(activeTab, (tab) => {
+watch(activeTab, async (tab) => {
   if (tab === 'files' && !fileList.value) void loadTaskRunFiles()
+  if (tab === 'logs') {
+    await nextTick()
+    if (logViewer.value) logViewer.value.scrollTop = logViewer.value.scrollHeight
+  }
 })
 
 function logPrefix(log: RunLog) {
@@ -938,6 +956,49 @@ onBeforeUnmount(() => sse?.close())
   overflow: hidden;
 }
 
+.run-log-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid #2d2e3d;
+  background: #0c1220;
+}
+
+.run-log-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 10px 14px;
+  background: #111827;
+  border-bottom: 1px solid #1e2a3d;
+}
+
+.run-log-title {
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.run-log-sub {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+:deep(.run-log-toolbar .el-button) {
+  background: #252633;
+  border-color: #3a3b4e;
+  color: #c4cad4;
+}
+
+:deep(.run-log-toolbar .el-button:hover) {
+  background: #2d2e3d;
+  color: #e2e8f0;
+}
+
 /* Right side */
 .run-right {
   display: flex;
@@ -977,11 +1038,10 @@ onBeforeUnmount(() => sse?.close())
 
 /* Context viewer */
 .run-context {
-  flex-shrink: 0;
-  max-height: 260px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 10px 12px;
-  border-bottom: 1px solid #2d2e3d;
   background: #111827;
 }
 
