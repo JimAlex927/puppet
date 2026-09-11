@@ -24,9 +24,9 @@
       <Controls position="bottom-right" class="vf-controls" />
       <MiniMap
         position="bottom-left"
-        :node-color="theme === 'light' ? '#ffffff' : '#252633'"
-        :node-stroke-color="theme === 'light' ? '#94a3b8' : '#3a3b4e'"
-        :mask-color="theme === 'light' ? 'rgba(226,232,240,0.72)' : 'rgba(26,27,35,0.7)'"
+        node-color="#252633"
+        node-stroke-color="#3a3b4e"
+        mask-color="rgba(26,27,35,0.7)"
         class="vf-minimap"
       />
     </VueFlow>
@@ -115,14 +115,7 @@ function handleConnect(connection: Connection) {
       animated: !isNext,
       label: isNext ? '成功' : '失败',
       labelStyle: { fontSize: 10, fill: color, fontWeight: 600 },
-      labelBgStyle: {
-        fill: 'var(--edge-label-bg, #252633)',
-        stroke: 'var(--edge-label-border, #3a3b4e)',
-        strokeWidth: 1,
-        fillOpacity: 0.96,
-      },
-      labelBgPadding: [6, 4],
-      labelBgBorderRadius: 5,
+      labelBgStyle: { fill: '#1a1b23', fillOpacity: 0.85 },
     },
   ])
 

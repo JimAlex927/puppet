@@ -236,15 +236,15 @@ function defaultFieldValue(type: string) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-const NODE_W = 228
-const NODE_H = 76
+const NODE_W = 210
+const NODE_H = 72
 
 function computeLayout(nodes: PipelineNode[]): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>()
   if (!nodes.length) return positions
 
   const g = new dagre.graphlib.Graph()
-  g.setGraph({ rankdir: 'TB', ranksep: 64, nodesep: 72, marginx: 40, marginy: 28 })
+  g.setGraph({ rankdir: 'TB', ranksep: 100, nodesep: 80 })
   g.setDefaultEdgeLabel(() => ({}))
 
   for (const n of nodes) g.setNode(n.id, { width: NODE_W, height: NODE_H })
@@ -287,14 +287,7 @@ function makeEdge(src: string, handle: string, tgt: string, color: string, anima
     animated,
     label: handle === 'next' ? '成功' : '失败',
     labelStyle: { fontSize: 10, fill: color, fontWeight: 600 },
-    labelBgStyle: {
-      fill: 'var(--edge-label-bg, #252633)',
-      stroke: 'var(--edge-label-border, #3a3b4e)',
-      strokeWidth: 1,
-      fillOpacity: 0.96,
-    },
-    labelBgPadding: [6, 4],
-    labelBgBorderRadius: 5,
+    labelBgStyle: { fill: '#1a1b23', fillOpacity: 0.85 },
   }
 }
 

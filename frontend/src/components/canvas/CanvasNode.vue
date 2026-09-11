@@ -39,11 +39,11 @@
     <template v-if="!data.status">
       <!-- Bottom = 成功/next -->
       <Handle id="next" type="source" :position="Position.Bottom" :style="HNEXT" />
-      <div class="cn-port-label cn-port-label--bottom cn-port-label--success">成功</div>
+      <div class="cn-port-label cn-port-label--bottom" style="color:#2dd4bf">成功</div>
 
       <!-- Right = 失败/fallback -->
       <Handle id="fallback" type="source" :position="Position.Right" :style="HFALL" />
-      <div class="cn-port-label cn-port-label--right cn-port-label--failure">失败</div>
+      <div class="cn-port-label cn-port-label--right" style="color:#f87171">失败</div>
     </template>
   </div>
 </template>
@@ -113,19 +113,18 @@ const icon  = computed(() => CATEGORY[props.data?.category]?.icon  ?? CATEGORY.d
 /* ── Root — single element so handles position correctly ── */
 .cn-root {
   position: relative;
-  width: 228px;
+  width: 210px;
 }
 
 /* ── Card ───────────────────────────────────────────────── */
 .cn-card {
   background: #252633;
-  border: 1px solid #3a3b4e;
-  border-radius: 12px;
+  border: 1.5px solid #3a3b4e;
+  border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
   position: relative;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
 }
 
 .cn--selected .cn-card {
@@ -183,27 +182,24 @@ const icon  = computed(() => CATEGORY[props.data?.category]?.icon  ?? CATEGORY.d
 .cn-body {
   display: flex;
   align-items: center;
-  min-height: 72px;
-  padding: 11px 12px 11px 16px;
-  gap: 10px;
+  padding: 10px 10px 10px 14px;
+  gap: 9px;
 }
 
 .cn-icon {
-  width: 32px; height: 32px;
-  border-radius: 9px;
+  width: 28px; height: 28px;
+  border-radius: 6px;
   display: grid; place-items: center;
   flex-shrink: 0;
 }
 
 .cn-name {
-  font-size: 14px; font-weight: 700; color: #e2e8f0;
+  font-size: 13px; font-weight: 600; color: #e2e8f0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 145px;
+  max-width: 120px;
 }
 .cn-type {
-  font-size: 10px; color: #8892a4; margin-top: 4px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 11px; color: #8892a4; margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -222,37 +218,24 @@ const icon  = computed(() => CATEGORY[props.data?.category]?.icon  ?? CATEGORY.d
 /* ── Port labels ─────────────────────────────────────────── */
 .cn-port-label {
   position: absolute;
-  z-index: 2;
-  padding: 3px 6px;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  background: var(--port-label-bg, #252633);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   pointer-events: none;
   white-space: nowrap;
   line-height: 1;
-  opacity: 0;
-  transition: opacity 0.15s ease;
 }
 
-.cn-root:hover .cn-port-label,
-.cn--selected .cn-port-label {
-  opacity: 1;
-}
-
-.cn-port-label--success { color: #0d9488; }
-.cn-port-label--failure { color: #ef4444; }
-
+/* sits just below the bottom handle dot */
 .cn-port-label--bottom {
-  bottom: -29px;
+  bottom: -22px;
   left: 50%;
   transform: translateX(-50%);
 }
 
+/* sits just to the right of the right handle dot */
 .cn-port-label--right {
   top: 50%;
-  right: -48px;
+  right: -38px;
   transform: translateY(-50%);
 }
 </style>
