@@ -8,6 +8,7 @@
       :delete-key-code="['Backspace', 'Delete']"
       class="pipeline-flow"
       @node-click="onNodeClick"
+      @node-double-click="onNodeDoubleClick"
       @pane-click="emit('pane-click')"
       @nodes-delete="onNodesDelete"
       @edges-delete="onEdgesDelete"
@@ -64,6 +65,7 @@ const emit = defineEmits<{
   'nodes-delete': [ids: string[]]
   'edges-delete': [deletions: { sourceId: string; sourceHandle: string }[]]
   'node-click': [id: string]
+  'node-edit': [id: string]
   'pane-click': []
   'node-drop': [meta: NodeMetadata, position: { x: number; y: number }]
 }>()
@@ -133,6 +135,10 @@ function onEdgesDelete(deleted: Edge[]) {
 
 function onNodeClick({ node }: NodeMouseEvent) {
   emit('node-click', node.id)
+}
+
+function onNodeDoubleClick({ node }: NodeMouseEvent) {
+  emit('node-edit', node.id)
 }
 
 // ── Drag & drop from palette ─────────────────────────────────────
