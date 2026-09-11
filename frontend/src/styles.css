@@ -2,6 +2,9 @@
   color: #18202f;
   background: #f4f7fb;
   --canvas-handle-border: #1a1b23;
+  --edge-label-bg: #252633;
+  --edge-label-border: #3a3b4e;
+  --port-label-bg: #252633;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -315,6 +318,9 @@ body {
 /* ── Pipeline editor light theme ─────────────────────────────────────── */
 html[data-theme='light'] {
   --canvas-handle-border: #f6f8fc;
+  --edge-label-bg: #ffffff;
+  --edge-label-border: #cbd5e1;
+  --port-label-bg: #ffffff;
 }
 
 html[data-theme='light'] body,
@@ -394,16 +400,16 @@ html[data-theme='light'] .cn-card {
 }
 
 html[data-theme='light'] .cn-name {
-  color: #1e293b;
+  color: #1e293b !important;
 }
 
 html[data-theme='light'] .cn-type,
 html[data-theme='light'] .cn-dur {
-  color: #64748b;
+  color: #64748b !important;
 }
 
 html[data-theme='light'] .cn--selected .cn-card {
-  background: linear-gradient(135deg, rgba(13, 148, 136, 0.14), #ffffff 46%);
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.14), #ffffff 46%) !important;
   box-shadow:
     0 0 0 2px rgba(13, 148, 136, 0.9),
     0 0 0 7px rgba(13, 148, 136, 0.12),
