@@ -73,17 +73,18 @@
         @edges-delete="(d) => handleEdgesDelete(d.map(x => [x.sourceId, x.sourceHandle] as [string, string]))"
         @nodes-delete="handleNodesDelete"
         @node-click="selectedNodeId = $event"
+        @node-edit="editingNodeId = $event"
         @pane-click="selectedNodeId = null"
         @node-drop="onNodeDrop"
         @layout="onAutoLayout"
       />
 
       <NodeConfigDrawer
-        :node="selectedNode"
-        :metadata="selectedMetadata"
+        :node="editingNode"
+        :metadata="editingMetadata"
         :credentials="credentials"
         :on-save-pipeline="savePipelineOnly"
-        @close="selectedNodeId = null"
+        @close="editingNodeId = null"
       />
 
       <aside v-if="activeRun" class="editor-run-panel">
@@ -427,7 +428,7 @@ const { theme, isLightTheme, toggleTheme } = useTheme()
 const {
   pipeline, task, projectName, nodeTypes, sourceTypes, credentials,
   loading, saving,
-  selectedNodeId, selectedNode, selectedMetadata,
+  selectedNodeId, selectedNode,
   taskForm,
   load, buildFlowElements,
   buildPipelineSnapshot,
@@ -437,6 +438,14 @@ const {
 
 const canvasRef = ref<InstanceType<typeof PipelineCanvas>>()
 const runDialog = ref<InstanceType<typeof RunTaskDialog>>()
+const editingNodeId = ref<string | null>(null)
+
+const editingNode = computed(() =>
+  pipeline.value?.nodes.find((node) => node.id === editingNodeId.value),
+)
+const editingMetadata = computed(() =>
+  nodeTypes.value.find((metadata) => metadata.type === editingNode.value?.type),
+)
 const settingsVisible = ref(false)
 const historyVisible = ref(false)
 const historyLoading = ref(false)
