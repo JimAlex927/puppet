@@ -44,17 +44,6 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button size="small" :icon="Clock" @click="openHistory">历史</el-button>
-        <el-button size="small" :icon="Setting" @click="settingsVisible = true">设置</el-button>
-        <el-button
-          size="small"
-          class="theme-toggle-btn"
-          :icon="isLightTheme ? Moon : Sunny"
-          :title="isLightTheme ? '切换深色风格' : '切换浅色风格'"
-          @click="toggleTheme"
-        >
-          {{ isLightTheme ? '深色' : '浅色' }}
-        </el-button>
         <el-button size="small" :icon="Back" @click="goBack">返回</el-button>
         <el-button size="small" type="primary" :icon="DocumentChecked" :loading="saving" @click="onSave">
           保存
@@ -62,32 +51,88 @@
       </el-space>
     </header>
 
-    <!-- ── Editor area: palette + canvas + config ──────────────────── -->
-    <div v-if="pipeline" class="editor-body">
-      <NodePalette :node-types="nodeTypes" @node-click="onNodeClickAdd" />
+    <!-- ── CVAT-style workspace: tool rail + canvas + overlays ─────── -->
+    <div v-if="pipeline" class="editor-workspace">
+      <aside class="editor-tool-rail" aria-label="Pipeline 工具栏">
+        <div class="tool-rail-brand">P</div>
 
-      <PipelineCanvas
-        ref="canvasRef"
-        :theme="theme"
-        @connect="handleConnect"
-        @edges-delete="(d) => handleEdgesDelete(d.map(x => [x.sourceId, x.sourceHandle] as [string, string]))"
-        @nodes-delete="handleNodesDelete"
-        @node-click="selectedNodeId = $event"
-        @node-edit="editingNodeId = $event"
-        @pane-click="selectedNodeId = null"
-        @node-drop="onNodeDrop"
-        @layout="onAutoLayout"
-      />
+        <button
+          type="button"
+          class="tool-rail-btn tool-rail-btn--primary"
+          :class="{ 'is-active': nodePickerVisible }"
+          title="新增节点"
+          @click="nodePickerVisible = !nodePickerVisible"
+        >
+          <el-icon :size="18"><Plus /></el-icon>
+          <span>新增</span>
+        </button>
 
-      <NodeConfigDrawer
-        :node="editingNode"
-        :metadata="editingMetadata"
-        :credentials="credentials"
-        :on-save-pipeline="savePipelineOnly"
-        @close="editingNodeId = null"
-      />
+        <div class="tool-rail-divider" />
 
-      <aside v-if="activeRun" class="editor-run-panel">
+        <button type="button" class="tool-rail-btn" title="整理布局" @click="onAutoLayout">
+          <el-icon :size="17"><Rank /></el-icon>
+          <span>整理</span>
+        </button>
+        <button type="button" class="tool-rail-btn" title="适应画布" @click="canvasRef?.fitCanvas()">
+          <el-icon :size="17"><FullScreen /></el-icon>
+          <span>适应</span>
+        </button>
+
+        <div class="tool-rail-spacer" />
+
+        <button type="button" class="tool-rail-btn" title="任务设置" @click="settingsVisible = true">
+          <el-icon :size="17"><Setting /></el-icon>
+          <span>设置</span>
+        </button>
+        <button type="button" class="tool-rail-btn" title="历史版本" @click="openHistory">
+          <el-icon :size="17"><Clock /></el-icon>
+          <span>历史</span>
+        </button>
+        <button
+          type="button"
+          class="tool-rail-btn"
+          :title="isLightTheme ? '切换深色风格' : '切换浅色风格'"
+          @click="toggleTheme"
+        >
+          <el-icon :size="17"><component :is="isLightTheme ? Moon : Sunny" /></el-icon>
+          <span>{{ isLightTheme ? '深色' : '浅色' }}</span>
+        </button>
+      </aside>
+
+      <div class="editor-body">
+        <PipelineCanvas
+          ref="canvasRef"
+          :theme="theme"
+          @connect="handleConnect"
+          @edges-delete="(d) => handleEdgesDelete(d.map(x => [x.sourceId, x.sourceHandle] as [string, string]))"
+          @nodes-delete="handleNodesDelete"
+          @node-click="selectedNodeId = $event"
+          @node-edit="editingNodeId = $event"
+          @pane-click="selectedNodeId = null"
+          @node-drop="onNodeDrop"
+          @layout="onAutoLayout"
+        />
+
+        <div v-if="nodePickerVisible" class="node-picker-popover">
+          <div class="node-picker-head">
+            <div>
+              <div class="node-picker-title">新增节点</div>
+              <div class="node-picker-subtitle">拖动节点到画布中，或点击快速添加</div>
+            </div>
+            <button type="button" class="node-picker-close" title="关闭" @click="nodePickerVisible = false">×</button>
+          </div>
+          <NodePalette :node-types="nodeTypes" @node-click="onNodeClickAdd" />
+        </div>
+
+        <NodeConfigDrawer
+          :node="editingNode"
+          :metadata="editingMetadata"
+          :credentials="credentials"
+          :on-save-pipeline="savePipelineOnly"
+          @close="editingNodeId = null"
+        />
+
+        <aside v-if="activeRun" class="editor-run-panel">
         <div class="erp-head">
           <div>
             <div class="erp-title">
@@ -148,7 +193,8 @@
           <span>{{ filteredRunLogs.length }} 条</span>
         </div>
         <RunLogViewer class="erp-log" :logs="filteredRunLogs" />
-      </aside>
+        </aside>
+      </div>
     </div>
 
     <!-- ── Task settings drawer ───────────────────────────────────── -->
@@ -405,7 +451,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Aim, ArrowDown, Back, Clock, CopyDocument, Delete, DocumentChecked, EditPen, Moon, Plus, Promotion, RefreshLeft, Setting, Sunny, VideoPlay } from '@element-plus/icons-vue'
+import { Aim, ArrowDown, Back, Clock, CopyDocument, Delete, DocumentChecked, EditPen, FullScreen, Moon, Plus, Promotion, Rank, RefreshLeft, Setting, Sunny, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@/api'
 import { usePipelineEditor } from '@/composables/usePipelineEditor'
@@ -438,6 +484,7 @@ const {
 
 const canvasRef = ref<InstanceType<typeof PipelineCanvas>>()
 const runDialog = ref<InstanceType<typeof RunTaskDialog>>()
+const nodePickerVisible = ref(false)
 const editingNodeId = ref<string | null>(null)
 
 const editingNode = computed(() =>
@@ -815,6 +862,7 @@ function onAutoLayout() {
 let clickAddOffset = 0
 function onNodeClickAdd(meta: NodeMetadata) {
   if (!pipeline.value) return
+  nodePickerVisible.value = false
   const existing = pipeline.value.nodes.length
   const x = 100 + (existing % 3) * 260
   const y = 80 + Math.floor(existing / 3) * 160 + (clickAddOffset++ % 3) * 20
@@ -844,8 +892,10 @@ onBeforeUnmount(() => activeRunEvents?.close())
 .editor-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 72px); /* subtract topbar */
-  margin: -22px; /* cancel main-panel padding */
+  width: 100vw;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   background: #1a1b23;
 }
 
@@ -928,11 +978,162 @@ onBeforeUnmount(() => activeRunEvents?.close())
   font-size: 15px;
 }
 
-.editor-body {
+.editor-workspace {
   flex: 1;
+  min-height: 0;
   display: flex;
   overflow: hidden;
 }
+
+.editor-tool-rail {
+  width: 72px;
+  flex: 0 0 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 8px;
+  background: #151822;
+  border-right: 1px solid #2d2e3d;
+  z-index: 8;
+}
+
+.tool-rail-brand {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #2dd4bf, #0d9488);
+  color: #062c29;
+  font-size: 18px;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(13, 148, 136, 0.22);
+}
+
+.tool-rail-btn {
+  width: 54px;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 2px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #8892a4;
+  cursor: pointer;
+  transition: background 0.16s, border-color 0.16s, color 0.16s, transform 0.16s;
+}
+
+.tool-rail-btn span {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.tool-rail-btn:hover,
+.tool-rail-btn.is-active {
+  border-color: rgba(45, 212, 191, 0.28);
+  background: rgba(45, 212, 191, 0.12);
+  color: #5eead4;
+}
+
+.tool-rail-btn:active { transform: translateY(1px); }
+
+.tool-rail-btn--primary {
+  border-color: rgba(45, 212, 191, 0.36);
+  background: rgba(45, 212, 191, 0.16);
+  color: #5eead4;
+}
+
+.tool-rail-divider {
+  width: 36px;
+  height: 1px;
+  margin: 2px 0 4px;
+  background: #2d2e3d;
+}
+
+.tool-rail-spacer { flex: 1; }
+
+.editor-body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+.node-picker-popover {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 20;
+  width: 300px;
+  height: min(680px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #3a3b4e;
+  border-radius: 12px;
+  background: #1e1f2e;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.node-picker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid #2d2e3d;
+}
+
+.node-picker-title {
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.node-picker-subtitle {
+  margin-top: 4px;
+  color: #8892a4;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.node-picker-close {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #8892a4;
+  font-size: 20px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.node-picker-close:hover {
+  background: #2d2e3d;
+  color: #e2e8f0;
+}
+
+.node-picker-popover :deep(.palette) {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-right: 0;
+  background: transparent;
+}
+
+.node-picker-popover :deep(.palette-search) { padding: 10px 12px; }
+.node-picker-popover :deep(.palette-body) { padding-bottom: 12px; }
 
 .editor-run-panel {
   width: 420px;
