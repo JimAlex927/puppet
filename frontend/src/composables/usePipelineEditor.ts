@@ -62,7 +62,7 @@ export function usePipelineEditor(taskId: number) {
 
   // ── Pipeline → VueFlow ────────────────────────────────────────────
 
-  function buildFlowElements(): { nodes: Node[]; edges: Edge[] } {
+  function buildFlowElements(forceLayout = false): { nodes: Node[]; edges: Edge[] } {
     if (!pipeline.value) return { nodes: [], edges: [] }
     const positions = computeLayout(pipeline.value.nodes)
     const nodeTypeMap = new Map(nodeTypes.value.map((m) => [m.type, m]))
@@ -70,7 +70,9 @@ export function usePipelineEditor(taskId: number) {
     const nodes: Node[] = pipeline.value.nodes.map((node, index) => ({
       id: node.id,
       type: 'canvas-node',
-      position: node.position ?? positions.get(node.id) ?? { x: index * 260, y: 0 },
+      position: forceLayout
+        ? positions.get(node.id) ?? node.position ?? { x: index * 260, y: 0 }
+        : node.position ?? positions.get(node.id) ?? { x: index * 260, y: 0 },
       data: {
         pipelineNode: node,
         category: nodeTypeMap.get(node.type)?.category ?? 'default',

@@ -75,6 +75,7 @@
         @node-click="selectedNodeId = $event"
         @pane-click="selectedNodeId = null"
         @node-drop="onNodeDrop"
+        @layout="onAutoLayout"
       />
 
       <NodeConfigDrawer
@@ -792,6 +793,13 @@ function onNodeDrop(meta: NodeMetadata, position: { x: number; y: number }) {
   if (!pipeline.value) return
   const { vfNode } = createPipelineNode(meta, position)
   canvasRef.value?.addVFNode(vfNode)
+}
+
+function onAutoLayout() {
+  if (!pipeline.value) return
+  const { nodes, edges } = buildFlowElements(true)
+  canvasRef.value?.initCanvas(nodes, edges)
+  ElMessage.success('已整理流程布局')
 }
 
 // Click-to-add: places node at a staggered position in the visible canvas area
