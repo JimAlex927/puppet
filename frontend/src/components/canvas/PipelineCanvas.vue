@@ -31,23 +31,6 @@
       />
     </VueFlow>
 
-    <div class="canvas-toolbar" aria-label="画布工具">
-      <div class="canvas-toolbar-title">
-        <span class="canvas-toolbar-kicker">WORKFLOW CANVAS</span>
-        <span class="canvas-toolbar-summary">{{ nodeCount }} 个节点 · {{ edgeCount }} 条连接</span>
-      </div>
-      <div class="canvas-toolbar-actions">
-        <button class="canvas-tool-btn" title="重新整理节点位置" @click="emit('layout')">
-          <el-icon :size="14"><Rank /></el-icon>
-          整理布局
-        </button>
-        <button class="canvas-tool-btn" title="让所有节点适配画布" @click="fitCanvas">
-          <el-icon :size="14"><FullScreen /></el-icon>
-          适应画布
-        </button>
-      </div>
-    </div>
-
     <div v-if="isEmpty" class="canvas-empty">
       <div class="canvas-empty-icon">
         <el-icon :size="40"><Share /></el-icon>
@@ -72,7 +55,7 @@ import {
   type Node,
   type NodeMouseEvent,
 } from '@vue-flow/core'
-import { FullScreen, Rank, Share } from '@element-plus/icons-vue'
+import { Share } from '@element-plus/icons-vue'
 import CanvasNode from './CanvasNode.vue'
 import type { NodeMetadata } from '@/types'
 
@@ -83,7 +66,6 @@ const emit = defineEmits<{
   'node-click': [id: string]
   'pane-click': []
   'node-drop': [meta: NodeMetadata, position: { x: number; y: number }]
-  layout: []
 }>()
 
 defineProps<{ theme: 'dark' | 'light' }>()
@@ -107,8 +89,6 @@ const {
 } = useVueFlow('puppet-canvas')
 
 const isEmpty = computed(() => getNodes.value.length === 0)
-const nodeCount = computed(() => getNodes.value.length)
-const edgeCount = computed(() => getEdges.value.length)
 
 // ── VF event handlers ────────────────────────────────────────────
 
@@ -164,10 +144,6 @@ function onNodeClick({ node }: NodeMouseEvent) {
   emit('node-click', node.id)
 }
 
-function fitCanvas() {
-  void fitView({ padding: 0.2, duration: 240 })
-}
-
 // ── Drag & drop from palette ─────────────────────────────────────
 
 function onDragOver(e: DragEvent) {
@@ -218,78 +194,6 @@ defineExpose({ initCanvas, addVFNode, removeVFNode, addVFEdge, removeVFEdges, ge
 
 .pipeline-flow { width: 100%; height: 100%; }
 
-.canvas-toolbar {
-  position: absolute;
-  top: 14px;
-  left: 16px;
-  right: 16px;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  pointer-events: none;
-}
-
-.canvas-toolbar-title,
-.canvas-toolbar-actions {
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-}
-
-.canvas-toolbar-title {
-  gap: 10px;
-  padding: 8px 12px;
-  border: 1px solid rgba(58, 59, 78, 0.76);
-  border-radius: 10px;
-  background: rgba(30, 31, 46, 0.86);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-  backdrop-filter: blur(10px);
-}
-
-.canvas-toolbar-kicker {
-  color: #2dd4bf;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-}
-
-.canvas-toolbar-summary {
-  color: #94a3b8;
-  font-size: 11px;
-}
-
-.canvas-toolbar-actions {
-  gap: 6px;
-  padding: 4px;
-  border: 1px solid rgba(58, 59, 78, 0.76);
-  border-radius: 10px;
-  background: rgba(30, 31, 46, 0.86);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-  backdrop-filter: blur(10px);
-}
-
-.canvas-tool-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 9px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: #c4cad4;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-  transition: background 0.15s, color 0.15s;
-}
-
-.canvas-tool-btn:hover {
-  background: #2d2e3d;
-  color: #e2e8f0;
-}
-
 :deep(.vf-controls) {
   background: #1e1f2e;
   border: 1px solid #2d2e3d;
@@ -328,11 +232,4 @@ defineExpose({ initCanvas, addVFNode, removeVFNode, addVFEdge, removeVFEdges, ge
 .canvas-empty-icon { color: #2d2e3d; }
 .canvas-empty-title { font-size: 16px; font-weight: 600; color: #3a3b4e; }
 .canvas-empty-desc  { font-size: 13px; color: #2d2e3d; text-align: center; max-width: 280px; }
-
-@media (max-width: 720px) {
-  .canvas-toolbar { top: 10px; left: 10px; right: 10px; }
-  .canvas-toolbar-title { display: none; }
-  .canvas-toolbar-actions { margin-left: auto; }
-  .canvas-tool-btn { padding: 7px 8px; }
-}
 </style>

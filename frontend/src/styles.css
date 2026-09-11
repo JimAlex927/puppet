@@ -378,30 +378,6 @@ html[data-theme='light'] .pipeline-flow {
   background: #f6f8fc !important;
 }
 
-html[data-theme='light'] .canvas-toolbar-title,
-html[data-theme='light'] .canvas-toolbar-actions {
-  border-color: rgba(203, 213, 225, 0.92) !important;
-  background: rgba(255, 255, 255, 0.88) !important;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08) !important;
-}
-
-html[data-theme='light'] .canvas-toolbar-kicker {
-  color: #0d9488;
-}
-
-html[data-theme='light'] .canvas-toolbar-summary {
-  color: #64748b;
-}
-
-html[data-theme='light'] .canvas-tool-btn {
-  color: #475569 !important;
-}
-
-html[data-theme='light'] .canvas-tool-btn:hover {
-  background: #f1f5f9 !important;
-  color: #0f172a !important;
-}
-
 html[data-theme='light'] .vf-controls,
 html[data-theme='light'] .vf-minimap {
   background: #ffffff;
