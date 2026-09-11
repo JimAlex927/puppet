@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <transition name="modal-fade">
-      <div v-if="node" class="ncf-layer">
+      <div v-if="node && draftNode" class="ncf-layer">
         <button class="ncf-backdrop" aria-label="关闭节点配置" @click="emit('close')" />
         <section class="ncf" role="dialog" aria-modal="true" aria-labelledby="ncf-title">
       <!-- Header -->
@@ -11,7 +11,7 @@
             <span class="ncf-eyebrow">节点配置</span>
             <el-input
               id="ncf-title"
-              v-model="node.name"
+              v-model="draftNode.name"
               class="ncf-name-input"
               size="large"
               placeholder="节点名称"
@@ -21,7 +21,7 @@
             <el-icon :size="18"><Close /></el-icon>
           </button>
         </div>
-        <div class="ncf-type">{{ node.type }} · 修改后保存即可应用</div>
+        <div class="ncf-type">{{ draftNode.type }} · 修改后保存即可应用</div>
       </div>
 
       <div class="ncf-body" :class="{ 'ncf-body--single': !visibleFields.length }">
@@ -30,15 +30,15 @@
           <div class="ncf-section-title">执行控制</div>
           <div class="ncf-field">
             <label class="ncf-label">超时 (秒)</label>
-            <el-input-number v-model="node.timeoutSeconds" :min="0" size="small" style="width: 100%" />
+            <el-input-number v-model="draftNode.timeoutSeconds" :min="0" size="small" style="width: 100%" />
           </div>
           <div class="ncf-field">
             <label class="ncf-label">失败重试次数</label>
-            <el-input-number v-model="node.retryTimes" :min="0" :max="10" size="small" style="width: 100%" />
+            <el-input-number v-model="draftNode.retryTimes" :min="0" :max="10" size="small" style="width: 100%" />
           </div>
           <div class="ncf-field ncf-field--inline">
             <label class="ncf-label">出错时继续执行</label>
-            <el-switch v-model="node.continueOnError" size="small" />
+            <el-switch v-model="draftNode.continueOnError" size="small" />
           </div>
         </div>
 
@@ -59,13 +59,13 @@
 
             <el-input
               v-if="field.type === 'input'"
-              v-model="node.params[field.name] as string"
+              v-model="draftNode.params[field.name] as string"
               :show-password="field.secret"
               size="small"
             />
             <el-input
               v-else-if="field.type === 'textarea'"
-              v-model="node.params[field.name] as string"
+              v-model="draftNode.params[field.name] as string"
               type="textarea"
               :rows="field.name === 'script' ? 14 : 6"
               size="small"
@@ -73,14 +73,14 @@
             />
             <el-input-number
               v-else-if="field.type === 'number'"
-              v-model="node.params[field.name] as number"
+              v-model="draftNode.params[field.name] as number"
               :min="0"
               size="small"
               style="width: 100%"
             />
             <el-select
               v-else-if="field.type === 'select'"
-              v-model="node.params[field.name]"
+              v-model="draftNode.params[field.name]"
               size="small"
               style="width: 100%"
             >
@@ -93,12 +93,12 @@
             </el-select>
             <el-switch
               v-else-if="field.type === 'switch'"
-              v-model="node.params[field.name] as boolean"
+              v-model="draftNode.params[field.name] as boolean"
               size="small"
             />
             <el-select
               v-else-if="field.type === 'credential'"
-              v-model="node.params[field.name]"
+              v-model="draftNode.params[field.name]"
               size="small"
               style="width: 100%"
             >
@@ -118,15 +118,15 @@
           <div class="ncf-section-title">节点信息</div>
           <div class="ncf-field">
             <label class="ncf-label">节点 ID</label>
-            <div class="ncf-mono">{{ node.id }}</div>
+            <div class="ncf-mono">{{ draftNode.id }}</div>
           </div>
           <div class="ncf-field">
             <label class="ncf-label">成功出口 (next)</label>
-            <div class="ncf-mono ncf-mono--teal">{{ node.nextNodeId || '— 未连接' }}</div>
+            <div class="ncf-mono ncf-mono--teal">{{ draftNode.nextNodeId || '— 未连接' }}</div>
           </div>
           <div class="ncf-field">
             <label class="ncf-label">失败出口 (fallback)</label>
-            <div class="ncf-mono ncf-mono--red">{{ node.fallbackNodeId || '— 未连接' }}</div>
+            <div class="ncf-mono ncf-mono--red">{{ draftNode.fallbackNodeId || '— 未连接' }}</div>
           </div>
         </div>
       </div>
@@ -147,7 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Check, Close, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { Credential, NodeField, NodeMetadata, PipelineNode } from '@/types'
@@ -162,17 +162,29 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; save: [] }>()
 
 const saving = ref(false)
+const draftNode = ref<PipelineNode>()
+
+watch(
+  () => props.node,
+  (node) => {
+    draftNode.value = node ? cloneNode(node) : undefined
+  },
+  { immediate: true },
+)
 
 const visibleFields = computed<NodeField[]>(() => {
-  if (!props.metadata || !props.node) return []
+  if (!props.metadata || !draftNode.value) return []
   return props.metadata.fields.filter((f) => {
     if (!f.showWhen) return true
-    return props.node!.params[f.showWhen.field] === f.showWhen.equals
+    return draftNode.value!.params[f.showWhen.field] === f.showWhen.equals
   })
 })
 
 async function onSave() {
+  if (!props.node || !draftNode.value) return
   saving.value = true
+  const original = cloneNode(props.node)
+  Object.assign(props.node, cloneNode(draftNode.value))
   try {
     if (props.onSavePipeline) {
       await props.onSavePipeline()
@@ -180,6 +192,7 @@ async function onSave() {
     emit('save')
     ElMessage.success('节点已保存')
   } catch (e: any) {
+    Object.assign(props.node, original)
     ElMessage.error(e?.message ?? '保存失败')
   } finally {
     saving.value = false
@@ -188,6 +201,10 @@ async function onSave() {
 
 function supportsTemplate(field: NodeField) {
   return field.type === 'input' || field.type === 'textarea'
+}
+
+function cloneNode(node: PipelineNode): PipelineNode {
+  return JSON.parse(JSON.stringify(node)) as PipelineNode
 }
 </script>
 
