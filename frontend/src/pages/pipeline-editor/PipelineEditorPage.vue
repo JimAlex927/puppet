@@ -1,9 +1,5 @@
 <template>
-  <div
-    class="editor-page"
-    v-loading="loading"
-    :element-loading-background="isLightTheme ? '#f6f8fc' : '#1a1b23'"
-  >
+  <div class="editor-page" v-loading="loading" element-loading-background="#1a1b23">
     <!-- ── Top bar ─────────────────────────────────────────────────── -->
     <header class="editor-bar">
       <el-breadcrumb separator="/" class="editor-breadcrumb">
@@ -46,15 +42,6 @@
         </el-dropdown>
         <el-button size="small" :icon="Clock" @click="openHistory">历史</el-button>
         <el-button size="small" :icon="Setting" @click="settingsVisible = true">设置</el-button>
-        <el-button
-          size="small"
-          class="theme-toggle-btn"
-          :icon="isLightTheme ? Moon : Sunny"
-          :title="isLightTheme ? '切换深色风格' : '切换浅色风格'"
-          @click="toggleTheme"
-        >
-          {{ isLightTheme ? '深色' : '浅色' }}
-        </el-button>
         <el-button size="small" :icon="Back" @click="goBack">返回</el-button>
         <el-button size="small" type="primary" :icon="DocumentChecked" :loading="saving" @click="onSave">
           保存
@@ -68,7 +55,6 @@
 
       <PipelineCanvas
         ref="canvasRef"
-        :theme="theme"
         @connect="handleConnect"
         @edges-delete="(d) => handleEdgesDelete(d.map(x => [x.sourceId, x.sourceHandle] as [string, string]))"
         @nodes-delete="handleNodesDelete"
@@ -403,11 +389,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Aim, ArrowDown, Back, Clock, CopyDocument, Delete, DocumentChecked, EditPen, Moon, Plus, Promotion, RefreshLeft, Setting, Sunny, VideoPlay } from '@element-plus/icons-vue'
+import { Aim, ArrowDown, Back, Clock, CopyDocument, Delete, DocumentChecked, EditPen, Plus, Promotion, RefreshLeft, Setting, VideoPlay } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '@/api'
 import { usePipelineEditor } from '@/composables/usePipelineEditor'
-import { useTheme } from '@/composables/useTheme'
 import NodePalette from '@/components/canvas/NodePalette.vue'
 import PipelineCanvas from '@/components/canvas/PipelineCanvas.vue'
 import NodeConfigDrawer from '@/components/canvas/NodeConfigDrawer.vue'
@@ -421,7 +406,6 @@ import { fmtDate } from '@/utils/format'
 const route = useRoute()
 const router = useRouter()
 const taskId = Number(route.params.id)
-const { theme, isLightTheme, toggleTheme } = useTheme()
 
 const {
   pipeline, task, projectName, nodeTypes, sourceTypes, credentials,

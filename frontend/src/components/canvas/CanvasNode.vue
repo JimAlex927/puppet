@@ -70,7 +70,7 @@ const props = defineProps<NodeProps<CanvasNodeData>>()
 // Inline styles so they always win over Vue Flow's own handle CSS
 const BASE_HANDLE = {
   borderRadius: '50%',
-  border: '2.5px solid var(--canvas-handle-border, #1a1b23)',
+  border: '2.5px solid #1a1b23',
   cursor: 'crosshair',
   zIndex: '10',
 } as const
