@@ -53,8 +53,8 @@
       <div class="canvas-empty-icon">
         <el-icon :size="40"><Share /></el-icon>
       </div>
-      <div class="canvas-empty-title">开始构建你的 Pipeline</div>
-      <div class="canvas-empty-desc">点击左侧“新增”选择节点，拖入画布后连接各个步骤</div>
+      <div class="canvas-empty-title">从左侧面板拖入节点</div>
+      <div class="canvas-empty-desc">拖拽节点到画布，然后连接节点的 handle 构建流程</div>
     </div>
   </div>
 </template>
@@ -207,7 +207,7 @@ function removeVFEdges(ids: string[]) { removeEdges(ids) }
 function getCurrentNodes() { return getNodes.value }
 function getCurrentEdges() { return getEdges.value }
 
-defineExpose({ initCanvas, addVFNode, removeVFNode, addVFEdge, removeVFEdges, getCurrentNodes, getCurrentEdges, fitCanvas })
+defineExpose({ initCanvas, addVFNode, removeVFNode, addVFEdge, removeVFEdges, getCurrentNodes, getCurrentEdges })
 </script>
 
 <style>
