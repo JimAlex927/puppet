@@ -18,8 +18,8 @@
       <Background
         :gap="20"
         :size="1"
-        pattern-color="#2d2e3d"
-        bg-color="#1a1b23"
+        :pattern-color="theme === 'light' ? '#dbe3ef' : '#2d2e3d'"
+        :bg-color="theme === 'light' ? '#f6f8fc' : '#1a1b23'"
       />
       <Controls position="bottom-right" class="vf-controls" />
       <MiniMap
@@ -67,6 +67,8 @@ const emit = defineEmits<{
   'pane-click': []
   'node-drop': [meta: NodeMetadata, position: { x: number; y: number }]
 }>()
+
+defineProps<{ theme: 'dark' | 'light' }>()
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const nodeTypes = { 'canvas-node': markRaw(CanvasNode as any) }
