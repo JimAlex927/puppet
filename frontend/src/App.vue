@@ -1,7 +1,7 @@
 <template>
   <router-view v-if="$route.path === '/login'" />
-  <el-container v-else class="app-shell" :class="{ 'app-shell--editor': isPipelineEditor }">
-    <el-aside v-if="!isPipelineEditor" width="232px" class="sidebar">
+  <el-container v-else class="app-shell">
+    <el-aside width="232px" class="sidebar">
       <div class="brand">
         <div class="brand-mark">P</div>
         <div>
@@ -41,7 +41,7 @@
       </el-menu>
     </el-aside>
     <el-container>
-      <el-header v-if="!isPipelineEditor" class="topbar">
+      <el-header class="topbar">
         <div>
           <h1>{{ title }}</h1>
         </div>
@@ -50,7 +50,7 @@
           <el-button size="small" :icon="SwitchButton" @click="logout">退出</el-button>
         </div>
       </el-header>
-      <el-main class="main-panel" :class="{ 'main-panel--editor': isPipelineEditor }">
+      <el-main class="main-panel">
         <router-view />
       </el-main>
     </el-container>
@@ -68,7 +68,6 @@ const route = useRoute()
 const router = useRouter()
 const currentUser = ref<UserType>()
 const title = computed(() => String(route.meta.title || 'Puppet'))
-const isPipelineEditor = computed(() => route.path.startsWith('/tasks/') && route.path.endsWith('/pipeline'))
 
 async function loadUser() {
   if (!localStorage.getItem('puppet_token')) return

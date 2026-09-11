@@ -24,22 +24,6 @@ body {
   min-height: 100vh;
 }
 
-.app-shell--editor,
-.app-shell--editor > .el-container,
-.main-panel--editor {
-  height: 100vh;
-}
-
-.main-panel--editor {
-  padding: 0;
-  overflow: hidden;
-}
-
-.main-panel--editor .editor-page {
-  height: 100vh;
-  margin: 0;
-}
-
 .sidebar {
   background: #101827;
   color: #e7edf7;
